@@ -1,6 +1,6 @@
 /* ****************************************************************************** *\
 
-Copyright (C) 2012 Intel Corporation.  All rights reserved.
+Copyright (C) 2012-2013 Intel Corporation.  All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
 modification, are permitted provided that the following conditions are met:
@@ -41,12 +41,8 @@ File Name: mfx_exposed_functions_list.h
 //
 
 // Minor value should precedes the major value
-#define API_VERSION {0, 1}
-#define API_VERSION_PREV {0, 0}
-
-// Library Common
-FUNCTION(mfxStatus, MFXQueryIMPL, (mfxSession session, mfxIMPL *impl), (session, impl))
-FUNCTION(mfxStatus, MFXQueryVersion, (mfxSession session, mfxVersion *version), (session, version))
+#define API_VERSION {{0, 1}}
+#define API_VERSION_PREV {{0, 0}}
 
 // CORE interface functions
 FUNCTION(mfxStatus, MFXVideoCORE_SetBufferAllocator, (mfxSession session, mfxBufferAllocator *allocator), (session, allocator))
@@ -102,12 +98,9 @@ FUNCTION(mfxStatus, MFXVideoVPP_RunFrameVPPAsync, (mfxSession session, mfxFrameS
 // Use the defines to set the current API version, until new functions are added.
 // When new functions are added, API_VERSION must be fixed with the previous
 // VERSION values and new section with functions declarations must be started.
-#define API_VERSION {MFX_VERSION_MINOR, MFX_VERSION_MAJOR}
-#define API_VERSION_PREV {0, 1}
 
-FUNCTION(mfxStatus, MFXDisjoinSession, (mfxSession session), (session))
-FUNCTION(mfxStatus, MFXSetPriority, (mfxSession session, mfxPriority priority), (session, priority))
-FUNCTION(mfxStatus, MFXGetPriority, (mfxSession session, mfxPriority *priority), (session, priority))
+#define API_VERSION {{1, 1}}
+#define API_VERSION_PREV {{0, 1}}
 
 FUNCTION(mfxStatus, MFXVideoUSER_Register, (mfxSession session, mfxU32 type, const mfxPlugin *par), (session, type, par))
 FUNCTION(mfxStatus, MFXVideoUSER_Unregister, (mfxSession session, mfxU32 type), (session, type))

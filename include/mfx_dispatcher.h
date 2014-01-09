@@ -1,6 +1,6 @@
 /* ****************************************************************************** *\
 
-Copyright (C) 2012 Intel Corporation.  All rights reserved.
+Copyright (C) 2012-2013 Intel Corporation.  All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
 modification, are permitted provided that the following conditions are met:
@@ -32,18 +32,11 @@ File Name: mfx_dispatcher.h
 #define __MFX_DISPATCHER_H
 
 #include <mfxvideo.h>
+#include <mfxaudio.h>
 #include <mfxplugin.h>
 #include <stddef.h>
-
-
-typedef wchar_t  msdk_disp_char;
-
-#if !defined (MFX_DISPATCHER_EXPOSED_PREFIX)
-    #define DISPATCHER_EXPOSED_PREFIX(fnc) fnc 
-#else
-    #define DISPATCHER_EXPOSED_PREFIX(fnc) _##fnc 
-#endif
-
+#include "mfx_dispatcher_defs.h"
+#include "mfx_load_plugin.h"
 
 enum
 {
@@ -67,10 +60,20 @@ enum eFunc
     eMFXClose,
     eMFXJoinSession,
     eMFXCloneSession,
-
+    eMFXQueryIMPL,
+    eMFXQueryVersion,
+    eMFXDisjoinSession,
+    eMFXSetPriority,
+    eMFXGetPriority,
 #include "mfx_exposed_functions_list.h"
+    eVideoFuncTotal
+};
 
-    eFuncTotal
+enum eAudioFunc
+{
+    eFakeAudioEnum = eMFXGetPriority,
+#include "mfxaudio_exposed_functions_list.h"
+    eAudioFuncTotal
 };
 
 // declare max buffer length for DLL path
@@ -101,11 +104,6 @@ enum
     MFX_DISPATCHER_VERSION_MAJOR = 1,
     MFX_DISPATCHER_VERSION_MINOR = 2
 };
-
-// declare library module's handle
-typedef void * mfxModuleHandle;
-
-typedef void (MFX_CDECL * mfxFunctionPointer)(void);
 
 // declare a dispatcher's handle
 struct MFX_DISP_HANDLE
@@ -145,8 +143,14 @@ struct MFX_DISP_HANDLE
     // Library's module handle
     mfxModuleHandle hModule;
 
+    MFX::MFXPluginStorage pluginHive;
+    MFX::MFXPluginFactory pluginFactory;
+
     // function call table
-    mfxFunctionPointer callTable[eFuncTotal];
+    mfxFunctionPointer callTable[eVideoFuncTotal];
+    mfxFunctionPointer callAudioTable[eAudioFuncTotal];
+
+    wchar_t subKeyName[MFX_MAX_VALUE_NAME];
 
 private:
     // Declare assignment operator and copy constructor to prevent occasional assignment
@@ -180,6 +184,8 @@ struct FUNCTION_DESCRIPTION
 } FUNCTION_DESCRIPTION;
 
 extern const
-FUNCTION_DESCRIPTION APIFunc[eFuncTotal];
+FUNCTION_DESCRIPTION APIFunc[eVideoFuncTotal];
 
+extern const
+FUNCTION_DESCRIPTION APIAudioFunc[eAudioFuncTotal];
 #endif // __MFX_DISPATCHER_H

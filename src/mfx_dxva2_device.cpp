@@ -28,8 +28,7 @@ File Name: mfx_dxva2_device.cpp
 
 \* ****************************************************************************** */
 
-#include <iostream>
-#include <sstream>
+#if defined(_WIN32) || defined(_WIN64)
 
 #define INITGUID
 #include <d3d9.h>
@@ -105,19 +104,19 @@ void DXDevice::Close(void)
 
 void DXDevice::LoadDLLModule(const wchar_t *pModuleName)
 {
-    UINT prevErrorMode;
+    DWORD prevErrorMode = 0;
 
     // unload the module if it is required
     UnloadDLLModule();
 
     // set the silent error mode
-    prevErrorMode = SetErrorMode(SEM_FAILCRITICALERRORS);
+    SetThreadErrorMode(SEM_FAILCRITICALERRORS, &prevErrorMode);
 
     // load specified library
     m_hModule = LoadLibraryW(pModuleName);
 
     // set the previous error mode
-    SetErrorMode(prevErrorMode);
+    SetThreadErrorMode(prevErrorMode, NULL);
 
 } // void LoadDLLModule(const wchar_t *pModuleName)
 
@@ -198,6 +197,7 @@ bool D3D9Device::Init(const mfxU32 adapterNum)
 
             if (NULL == m_pD3D9)
             {
+                DXVA2DEVICE_TRACE(("FAIL: Direct3DCreate9(%d) : GetLastError()=0x%x", D3D_SDK_VERSION, GetLastError()));
                 return false;
             }
 
@@ -214,6 +214,7 @@ bool D3D9Device::Init(const mfxU32 adapterNum)
             hRes = pD3D9->GetAdapterIdentifier(adapterNum, 0, &adapterIdent);
             if (D3D_OK != hRes)
             {
+                DXVA2DEVICE_TRACE(("FAIL: GetAdapterIdentifier(%d) = 0x%x \n", adapterNum, hRes)); 
                 return false;
             }
 
@@ -260,11 +261,17 @@ bool D3D9Device::Init(const mfxU32 adapterNum)
         }
         else
         {
-            return false;
+            DXVA2DEVICE_TRACE_OPERATION({
+                wchar_t path[1024]; 
+                DWORD lastErr = GetLastError();
+                GetModuleFileNameW(m_hModule, path, sizeof(path)/sizeof(path[0]));
+                printf("FAIL: invoking GetProcAddress(Direct3DCreate9) in %S : GetLastError()==0x%x\n", path, lastErr); });
+                return false;
         }
     }
     else
     {
+        DXVA2DEVICE_TRACE(("FAIL: invoking LoadLibrary(\"d3d9.dll\") : GetLastError()==0x%x\n", GetLastError())); 
         return false;
     }
 
@@ -546,3 +553,4 @@ mfxU32 DXVA2Device::GetAdapterCount(void) const
     return m_numAdapters;
 
 } // mfxU32 DXVA2Device::GetAdapterCount(void) const
+#endif

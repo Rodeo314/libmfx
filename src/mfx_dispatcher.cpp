@@ -31,11 +31,20 @@ File Name: mfx_dispatcher.cpp
 #include "mfx_dispatcher.h"
 #include "mfx_dispatcher_log.h"
 #include "mfx_load_dll.h"
-#include <windows.h>
 
+#include <string.h>
+#if defined(_WIN32) || defined(_WIN64)
+    #include <windows.h>
+#else
+
+#include <dlfcn.h>
+#include <iostream>
+
+#endif // defined(_WIN32) || defined(_WIN64)
 
 MFX_DISP_HANDLE::MFX_DISP_HANDLE(const mfxVersion requiredVersion) :
-    apiVersion(requiredVersion)
+    apiVersion(requiredVersion),
+    pluginFactory((mfxSession)this)
 {
     implType = MFX_LIB_SOFTWARE;
     impl = MFX_IMPL_SOFTWARE;
@@ -46,6 +55,7 @@ MFX_DISP_HANDLE::MFX_DISP_HANDLE(const mfxVersion requiredVersion) :
     hModule = (mfxModuleHandle) 0;
 
     memset(callTable, 0, sizeof(callTable));
+    memset(callAudioTable, 0, sizeof(callAudioTable));
 
 } // MFX_DISP_HANDLE::MFX_DISP_HANDLE(const mfxVersion requiredVersion)
 
@@ -73,6 +83,7 @@ mfxStatus MFX_DISP_HANDLE::Close(void)
         hModule = (mfxModuleHandle) 0;
 
         memset(callTable, 0, sizeof(callTable));
+        memset(callAudioTable, 0, sizeof(callAudioTable));
     }
 
     return mfxRes;
@@ -83,6 +94,7 @@ mfxStatus MFX_DISP_HANDLE::LoadSelectedDLL(const msdk_disp_char *pPath, eMfxImpl
                                            mfxIMPL impl, mfxIMPL implInterface)
 {
     mfxStatus mfxRes = MFX_ERR_NONE;
+    bool isFunctionMissed = false;
 
     // check error(s)
     if ((MFX_LIB_SOFTWARE != implType) &&
@@ -92,7 +104,8 @@ mfxStatus MFX_DISP_HANDLE::LoadSelectedDLL(const msdk_disp_char *pPath, eMfxImpl
         return MFX_ERR_ABORTED;
     }
     // only exact types of implementation is allowed
-    if ((MFX_IMPL_SOFTWARE != impl) &&
+    if (!(impl & MFX_IMPL_AUDIO) &&
+        (MFX_IMPL_SOFTWARE != impl) &&
         (MFX_IMPL_HARDWARE != impl) &&
         (MFX_IMPL_HARDWARE2 != impl) &&
         (MFX_IMPL_HARDWARE3 != impl) &&
@@ -111,8 +124,8 @@ mfxStatus MFX_DISP_HANDLE::LoadSelectedDLL(const msdk_disp_char *pPath, eMfxImpl
     this->implInterface = implInterface;
 
     {
-        mfxVersion maxAPIVersion = {0, 0};
-        mfxVersion minAPIVersion = {0x7fff, 0x7fff};
+        mfxVersion maxAPIVersion = {{0, 0}};
+        mfxVersion minAPIVersion = {{0x7fff, 0x7fff}};
 
         DISPATCHER_LOG_BLOCK(("invoking LoadLibrary(%S)\n", pPath));
         // load the DLL into the memory
@@ -128,28 +141,70 @@ mfxStatus MFX_DISP_HANDLE::LoadSelectedDLL(const msdk_disp_char *pPath, eMfxImpl
                 DISPATCHER_LOG_INFO((("loaded module %S\n"), modulePath))
             });
 
-            // load pointers to exposed functions
-            for (i = 0; i < eFuncTotal; i += 1)
+            if (impl & MFX_IMPL_AUDIO)
             {
-                mfxFunctionPointer pProc = (mfxFunctionPointer) MFX::mfx_dll_get_addr(hModule, APIFunc[i].pName);
-                if (pProc)
+                // load audio functions: pointers to exposed functions
+                for (i = 0; i < eAudioFuncTotal; i += 1)
                 {
-                    // function exists in the library,
-                    // save the pointer.
-                    callTable[i] = pProc;
-                    // save the maximum available API version
-                    if (maxAPIVersion.Version < APIFunc[i].apiVersion.Version)
+                    // construct correct name of the function - remove "_a" postfix
+
+                    mfxFunctionPointer pProc = (mfxFunctionPointer) MFX::mfx_dll_get_addr(hModule, APIAudioFunc[i].pName);
+    #ifdef ANDROID
+                    // on Android very first call to dlsym may fail
+                    if (!pProc) pProc = (mfxFunctionPointer) MFX::mfx_dll_get_addr(hModule, APIAudioFunc[i].pName);
+    #endif
+                    if (pProc)
                     {
-                        maxAPIVersion = APIFunc[i].apiVersion;
-                        DISPATCHER_LOG_INFO((("found API function \"%s\", maxAPIVersion increased == %u.%u\n"), APIFunc[i].pName, maxAPIVersion.Major, maxAPIVersion.Minor ));
+                        // function exists in the library,
+                        // save the pointer.
+                        callAudioTable[i] = pProc;
+                        // save the maximum available API version
+                        if (maxAPIVersion.Version < APIAudioFunc[i].apiVersion.Version)
+                        {
+                            maxAPIVersion = APIAudioFunc[i].apiVersion;
+                            DISPATCHER_LOG_INFO((("found API function \"%s\", maxAPIVersion increased == %u.%u\n"), APIAudioFunc[i].pName, maxAPIVersion.Major, maxAPIVersion.Minor ));
+                        }
+                    }
+                    else if (minAPIVersion.Version > APIAudioFunc[i].apiPrevVersion.Version)
+                    {
+                        // The library doesn't contain the function.
+                        // Reduce the minimal workable API version.
+                        isFunctionMissed = true;
+                        minAPIVersion = APIAudioFunc[i].apiPrevVersion;
+                        DISPATCHER_LOG_WRN((("Can't find API function \"%s\", minAPIVersion lowered=%u.%u\n"), APIAudioFunc[i].pName,minAPIVersion.Major, minAPIVersion.Minor));
                     }
                 }
-                else if (minAPIVersion.Version > APIFunc[i].apiPrevVersion.Version)
+            }
+            else
+            {
+                // load video functions: pointers to exposed functions
+                for (i = 0; i < eVideoFuncTotal; i += 1)
                 {
-                    // The library doesn't contain the function.
-                    // Reduce the minimal workable API version.
-                    minAPIVersion = APIFunc[i].apiPrevVersion;
-                    DISPATCHER_LOG_WRN((("Can't find API function \"%s\", minAPIVersion lowered=%u.%u\n"), APIFunc[i].pName,minAPIVersion.Major, minAPIVersion.Minor));
+                    mfxFunctionPointer pProc = (mfxFunctionPointer) MFX::mfx_dll_get_addr(hModule, APIFunc[i].pName);
+    #ifdef ANDROID
+                    // on Android very first call to dlsym may fail
+                    if (!pProc) pProc = (mfxFunctionPointer) MFX::mfx_dll_get_addr(hModule, APIFunc[i].pName);
+    #endif
+                    if (pProc)
+                    {
+                        // function exists in the library,
+                        // save the pointer.
+                        callTable[i] = pProc;
+                        // save the maximum available API version
+                        if (maxAPIVersion.Version < APIFunc[i].apiVersion.Version)
+                        {
+                            maxAPIVersion = APIFunc[i].apiVersion;
+                            DISPATCHER_LOG_INFO((("found API function \"%s\", maxAPIVersion increased == %u.%u\n"), APIFunc[i].pName, maxAPIVersion.Major, maxAPIVersion.Minor ));
+                        }
+                    }
+                    else if (minAPIVersion.Version > APIFunc[i].apiPrevVersion.Version)
+                    {
+                        // The library doesn't contain the function.
+                        // Reduce the minimal workable API version.
+                        isFunctionMissed = true;
+                        minAPIVersion = APIFunc[i].apiPrevVersion;
+                        DISPATCHER_LOG_WRN((("Can't find API function \"%s\", minAPIVersion lowered=%u.%u\n"), APIFunc[i].pName,minAPIVersion.Major, minAPIVersion.Minor));
+                    }
                 }
             }
 
@@ -167,7 +222,7 @@ mfxStatus MFX_DISP_HANDLE::LoadSelectedDLL(const msdk_disp_char *pPath, eMfxImpl
             // the library must be unloaded.
             if ((0 == minAPIVersion.Version) ||
                 (minAPIVersion.Major != apiVersion.Major) ||
-                (minAPIVersion.Minor < apiVersion.Minor))
+                ((minAPIVersion.Minor < apiVersion.Minor) && isFunctionMissed))
             {
                 DISPATCHER_LOG_WRN((("library version check failed: actual library version is %u.%u\n"),
                                minAPIVersion.Major, minAPIVersion.Minor))
@@ -176,7 +231,11 @@ mfxStatus MFX_DISP_HANDLE::LoadSelectedDLL(const msdk_disp_char *pPath, eMfxImpl
         }
         else
         {
+#if defined(_WIN32) || defined(_WIN64)
             DISPATCHER_LOG_WRN((("can't find DLL: GetLastErr()=0x%x\n"), GetLastError()))
+#else
+            DISPATCHER_LOG_WRN((("can't find DLL: dlerror() = \"%s\"\n"), dlerror()));
+#endif
             mfxRes = MFX_ERR_UNSUPPORTED;
         }
     }
@@ -184,11 +243,19 @@ mfxStatus MFX_DISP_HANDLE::LoadSelectedDLL(const msdk_disp_char *pPath, eMfxImpl
     // initialize the loaded DLL
     if (MFX_ERR_NONE == mfxRes)
     {
-        mfxFunctionPointer pFunc;
         mfxVersion version(apiVersion);
 
-        // call the DLL's function
-        pFunc = callTable[eMFXInit];
+        /* check whether it is audio session or video */
+        int tableIndex = eMFXInit; 
+        mfxFunctionPointer pFunc;
+        if (impl & MFX_IMPL_AUDIO) 
+        { 
+            pFunc = callAudioTable[tableIndex];
+        } 
+        else
+        {
+            pFunc = callTable[tableIndex];
+        }
 
         {
             DISPATCHER_LOG_BLOCK( ("MFXInit(%s,ver=%u.%u,session=0x%p)\n"
@@ -214,19 +281,30 @@ mfxStatus MFX_DISP_HANDLE::LoadSelectedDLL(const msdk_disp_char *pPath, eMfxImpl
 
     return mfxRes;
 
-} // mfxStatus MFX_DISP_HANDLE::LoadSelectedDLL(const wchar_t *pPath, eMfxImplType implType, mfxIMPL impl)
+} // mfxStatus MFX_DISP_HANDLE::LoadSelectedDLL(const msdk_disp_char *pPath, eMfxImplType implType, mfxIMPL impl)
 
 mfxStatus MFX_DISP_HANDLE::UnLoadSelectedDLL(void)
 {
     mfxStatus mfxRes = MFX_ERR_NOT_INITIALIZED;
 
+    //unregistered plugins if any
+    pluginFactory.Close();
+
     // close the loaded DLL
     if (session)
     {
+        /* check whether it is audio session or video */
+        int tableIndex = eMFXClose; 
         mfxFunctionPointer pFunc;
+        if (impl & MFX_IMPL_AUDIO) 
+        { 
+            pFunc = callAudioTable[tableIndex];
+        } 
+        else
+        {
+            pFunc = callTable[tableIndex];
+        }
 
-        // call the DLL's function
-        pFunc = callTable[eMFXClose];
         mfxRes = (*(mfxStatus (MFX_CDECL *) (mfxSession)) pFunc) (session);
         if (MFX_ERR_NONE == mfxRes)
         {

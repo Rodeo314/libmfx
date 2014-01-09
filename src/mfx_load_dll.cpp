@@ -28,6 +28,7 @@ File Name: mfx_load_dll.cpp
 
 \* ****************************************************************************** */
 
+#if defined(_WIN32) || defined(_WIN64)
 
 #include "mfx_dispatcher.h"
 #include "mfx_load_dll.h"
@@ -42,23 +43,35 @@ File Name: mfx_load_dll.cpp
 const
 wchar_t * const defaultDLLName[2] = {L"libmfxhw64.dll",
                                      L"libmfxsw64.dll"};
+const
+wchar_t * const defaultAudioDLLName[2] = {L"libmfxaudiosw64.dll",
+                                     L"libmfxaudiosw64.dll"};
 #elif defined(_WIN32)
 const
 wchar_t * const defaultDLLName[2] = {L"libmfxhw32.dll",
                                      L"libmfxsw32.dll"};
 
+const
+wchar_t * const defaultAudioDLLName[2] = {L"libmfxaudiosw32.dll",
+                                     L"libmfxaudiosw32.dll"};
 #endif // (defined(_WIN64))
 
 #else // defined(_DEBUG)
 
 #if defined(_WIN64)
 const
-msdk_disp_char * const defaultDLLName[2] = {L"libmfxhw64_d.dll",
-                                            L"libmfxsw64_d.dll"};
+msdk_disp_char * const defaultDLLName[2] = {L"libmfxhw64.dll",
+                                            L"libmfxsw64.dll"};
+const
+msdk_disp_char * const defaultAudioDLLName[2] = {L"libmfxaudiosw64.dll",
+                                            L"libmfxaudiosw64.dll"};
 #elif defined(WIN32)
 const
-msdk_disp_char * const defaultDLLName[2] = {L"libmfxhw32_d.dll",
-                                            L"libmfxsw32_d.dll"};
+msdk_disp_char * const defaultDLLName[2] = {L"libmfxhw32.dll",
+                                            L"libmfxsw32.dll"};
+const
+msdk_disp_char * const defaultAudioDLLName[2] = {L"libmfxaudiosw32.dll",
+                                            L"libmfxaudiosw32.dll"};
 
 #endif // (defined(_WIN64))
 
@@ -84,6 +97,23 @@ mfxStatus mfx_get_default_dll_name(msdk_disp_char *pPath, size_t pathSize, eMfxI
 #endif
 } // mfxStatus mfx_get_default_dll_name(wchar_t *pPath, size_t pathSize, eMfxImplType implType)
 
+mfxStatus mfx_get_default_audio_dll_name(msdk_disp_char *pPath, size_t pathSize, eMfxImplType implType)
+{
+    if (!pPath)
+    {
+        return MFX_ERR_NULL_PTR;
+    }
+    
+    // there are only 2 implementation with default DLL names
+#if _MSC_VER >= 1400
+    return 0 == wcscpy_s(pPath, pathSize, defaultAudioDLLName[implType & 1])
+        ? MFX_ERR_NONE : MFX_ERR_UNKNOWN;
+#else    
+    wcscpy(pPath, defaultAudioDLLName[implType & 1]);
+    return MFX_ERR_NONE;
+#endif
+} // mfxStatus mfx_get_default_audio_dll_name(wchar_t *pPath, size_t pathSize, eMfxImplType implType)
+
 mfxModuleHandle mfx_dll_load(const msdk_disp_char *pFileName)
 {
     mfxModuleHandle hModule = (mfxModuleHandle) 0;
@@ -95,11 +125,12 @@ mfxModuleHandle mfx_dll_load(const msdk_disp_char *pFileName)
     }
 
     // set the silent error mode
-    UINT prevErrorMode = SetErrorMode(SEM_FAILCRITICALERRORS);
+    DWORD prevErrorMode = 0;
+    SetThreadErrorMode(SEM_FAILCRITICALERRORS, &prevErrorMode);
     // load the library's module
     hModule = LoadLibraryW(pFileName);
     // set the previous error mode
-    SetErrorMode(prevErrorMode);
+    SetThreadErrorMode(prevErrorMode, NULL);
 
     return hModule;
 
@@ -127,5 +158,28 @@ bool mfx_dll_free(mfxModuleHandle handle)
     return !!bRes;
 } // bool mfx_dll_free(mfxModuleHandle handle)
 
+mfxModuleHandle mfx_get_dll_handle(const msdk_disp_char *pFileName)
+{
+    mfxModuleHandle hModule = (mfxModuleHandle) 0;
+
+    // check error(s)
+    if (NULL == pFileName)
+    {
+        return NULL;
+    }
+
+    // set the silent error mode
+    DWORD prevErrorMode = 0;
+    SetThreadErrorMode(SEM_FAILCRITICALERRORS, &prevErrorMode);
+    // load the library's module
+    GetModuleHandleExW(0, pFileName, (HMODULE*) &hModule);
+    // set the previous error mode
+    SetThreadErrorMode(prevErrorMode, NULL);
+
+    return hModule;
+}
+
 
 } // namespace MFX
+
+#endif // #if defined(_WIN32) || defined(_WIN64)

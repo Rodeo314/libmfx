@@ -1,6 +1,6 @@
 /* ****************************************************************************** *\
 
-Copyright (C) 2012-2013 Intel Corporation.  All rights reserved.
+Copyright (C) 2013 Intel Corporation.  All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
 modification, are permitted provided that the following conditions are met:
@@ -24,53 +24,29 @@ THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF
 THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-File Name: mfx_critical_section.h
+File Name: mfx_dispatcher_defs.h
 
 \* ****************************************************************************** */
 
-#if !defined(__MFX_CRITICAL_SECTION_H)
-#define __MFX_CRITICAL_SECTION_H
+#pragma once
+#include "mfxdefs.h"
 
-#include <mfxdefs.h>
+#if defined(_WIN32) || defined(_WIN64)
+typedef wchar_t  msdk_disp_char;
+#define msdk_disp_char_cpy_s(to, to_size, from) wcscpy_s(to,to_size, from)
+#else
+#define msdk_disp_char char
+#define msdk_disp_char_cpy_s(to, to_size, from) strcpy(to, from)
+#endif
 
-namespace MFX
-{
+// declare library module's handle
+typedef void * mfxModuleHandle;
 
-// Just set "critical section" instance to zero for initialization.
-typedef volatile mfxL32 mfxCriticalSection;
+typedef void (MFX_CDECL * mfxFunctionPointer)(void);
 
-// Enter the global critical section.
-void mfxEnterCriticalSection(mfxCriticalSection *pCSection);
 
-// Leave the global critical section.
-void mfxLeaveCriticalSection(mfxCriticalSection *pCSection);
-
-class MFXAutomaticCriticalSection
-{
-public:
-    // Constructor
-    explicit MFXAutomaticCriticalSection(mfxCriticalSection *pCSection)
-    {
-        m_pCSection = pCSection;
-        mfxEnterCriticalSection(m_pCSection);
-    }
-
-    // Destructor
-    ~MFXAutomaticCriticalSection()
-    {
-        mfxLeaveCriticalSection(m_pCSection);
-    }
-
-protected:
-    // Pointer to a critical section
-    mfxCriticalSection *m_pCSection;
-
-private:
-    // unimplemented by intent to make this class non-copyable
-    MFXAutomaticCriticalSection(const MFXAutomaticCriticalSection &);
-    void operator=(const MFXAutomaticCriticalSection &);
-};
-
-} // namespace MFX
-
-#endif // __MFX_CRITICAL_SECTION_H
+#if !defined (MFX_DISPATCHER_EXPOSED_PREFIX)
+#define DISPATCHER_EXPOSED_PREFIX(fnc) fnc 
+#else
+#define DISPATCHER_EXPOSED_PREFIX(fnc) _##fnc 
+#endif

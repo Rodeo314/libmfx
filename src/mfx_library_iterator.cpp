@@ -28,6 +28,8 @@ File Name: mfx_library_iterator.cpp
 
 \* ****************************************************************************** */
 
+#if defined(_WIN32) || defined(_WIN64)
+
 #include "mfx_library_iterator.h"
 
 #include "mfx_dispatcher.h"
@@ -60,6 +62,66 @@ wchar_t pathKeyName[] = L"Path";
 const
 wchar_t apiVersionName[] = L"APIVersion";
 
+mfxStatus GetImplementationType(const mfxU32 adapterNum, mfxIMPL *pImplInterface, mfxU32 *pVendorID, mfxU32 *pDeviceID)
+{
+    if (NULL == pImplInterface)
+    {
+        return MFX_ERR_NULL_PTR;
+    }
+
+    DXVA2Device dxvaDevice;
+    if (MFX_IMPL_VIA_D3D9 == *pImplInterface)
+    {
+        // try to create the Direct3D 9 device and find right adapter
+        if (!dxvaDevice.InitD3D9(adapterNum))
+        {
+            DISPATCHER_LOG_INFO((("dxvaDevice.InitD3D9(%d) Failed "), adapterNum ));
+            return MFX_ERR_UNSUPPORTED;
+        }
+    }
+    else if (MFX_IMPL_VIA_D3D11 == *pImplInterface)
+    {
+        // try to open DXGI 1.1 device to get hardware ID
+        if (!dxvaDevice.InitDXGI1(adapterNum))
+        {
+            DISPATCHER_LOG_INFO((("dxvaDevice.InitDXGI1(%d) Failed "), adapterNum ));
+            return MFX_ERR_UNSUPPORTED;
+        }
+    } 
+    else if (MFX_IMPL_VIA_ANY == *pImplInterface)
+    {
+        // try the Direct3D 9 device
+        if (dxvaDevice.InitD3D9(adapterNum))
+        {
+            *pImplInterface = MFX_IMPL_VIA_D3D9; // store value for GetImplementationType() call
+        }
+        // else try to open DXGI 1.1 device to get hardware ID
+        else if (dxvaDevice.InitDXGI1(adapterNum))
+        {
+            *pImplInterface = MFX_IMPL_VIA_D3D11; // store value for GetImplementationType() call
+        }
+        else
+        {
+            DISPATCHER_LOG_INFO((("Unsupported adapter %d "), adapterNum ));
+            return MFX_ERR_UNSUPPORTED;
+        }
+    }
+    else
+    {
+        DISPATCHER_LOG_ERROR((("Unknown implementation type %d "), *pImplInterface ));
+        return MFX_ERR_UNSUPPORTED;
+    }
+
+    // obtain card's parameters
+    if (pVendorID && pDeviceID)
+    {
+        *pVendorID = dxvaDevice.GetVendorID();
+        *pDeviceID = dxvaDevice.GetDeviceID();
+    }
+
+    return MFX_ERR_NONE;
+}
+
 MFXLibraryIterator::MFXLibraryIterator(void)
 {
     m_implType = MFX_LIB_PSEUDO;
@@ -70,6 +132,8 @@ MFXLibraryIterator::MFXLibraryIterator(void)
     m_lastLibIndex = 0;
     m_lastLibMerit = MFX_MAX_MERIT;
 
+    m_bIsSubKeyValid = 0;
+    m_StorageID = 0;
 } // MFXLibraryIterator::MFXLibraryIterator(void)
 
 MFXLibraryIterator::~MFXLibraryIterator(void)
@@ -92,7 +156,6 @@ void MFXLibraryIterator::Release(void)
 
 mfxStatus MFXLibraryIterator::Init(eMfxImplType implType, mfxIMPL implInterface, const mfxU32 adapterNum, int storageID)
 {
-    DXVA2Device dxvaDevice;
     HKEY rootHKey;
     bool bRes;
 
@@ -107,6 +170,7 @@ mfxStatus MFXLibraryIterator::Init(eMfxImplType implType, mfxIMPL implInterface,
     Release();
 
     // open required registry key
+    m_StorageID = storageID;
     rootHKey = (MFX_LOCAL_MACHINE_KEY == storageID) ? (HKEY_LOCAL_MACHINE) : (HKEY_CURRENT_USER);
     bRes = m_baseRegKey.Open(rootHKey, rootDispPath, KEY_READ);
     if (false == bRes)
@@ -123,51 +187,15 @@ mfxStatus MFXLibraryIterator::Init(eMfxImplType implType, mfxIMPL implInterface,
                     ? implInterface
                     : MFX_IMPL_VIA_ANY;
 
-    if (MFX_IMPL_VIA_D3D9 == m_implInterface)
+    //deviceID and vendorID are not actual for SW library loading
+    if (m_implInterface != MFX_LIB_SOFTWARE)
     {
-        // try to create the Direct3D 9 device and find right adapter
-        if (!dxvaDevice.InitD3D9(adapterNum))
+        mfxStatus mfxRes = MFX::GetImplementationType(adapterNum, &m_implInterface, &m_vendorID, &m_deviceID);
+        if (MFX_ERR_NONE != mfxRes)
         {
-            DISPATCHER_LOG_INFO((("dxvaDevice.InitD3D9(%d) Failed "), adapterNum ));
-            return MFX_ERR_UNSUPPORTED;
-        }        
-    }
-    else if (MFX_IMPL_VIA_D3D11 == m_implInterface)
-    {
-        // try to open DXGI 1.1 device to get hardware ID
-        if (!dxvaDevice.InitDXGI1(adapterNum))
-        {
-            DISPATCHER_LOG_INFO((("dxvaDevice.InitDXGI1(%d) Failed "), adapterNum ));
-            return MFX_ERR_UNSUPPORTED;
-        }
-    } 
-    else if (MFX_IMPL_VIA_ANY == m_implInterface)
-    {
-        // try the Direct3D 9 device
-        if (dxvaDevice.InitD3D9(adapterNum))
-        {
-            m_implInterface = MFX_IMPL_VIA_D3D9; // store value for GetImplementationType() call
-        }
-        // else try to open DXGI 1.1 device to get hardware ID
-        else if (dxvaDevice.InitDXGI1(adapterNum))
-        {
-            m_implInterface = MFX_IMPL_VIA_D3D11; // store value for GetImplementationType() call
-        }
-        else
-        {
-            DISPATCHER_LOG_INFO((("Unsupported adapter %d "), adapterNum ));
-            return MFX_ERR_UNSUPPORTED;
+            return mfxRes;
         }
     }
-    else
-    {
-        DISPATCHER_LOG_ERROR((("Unknown implementation type %d "), m_implInterface ));
-        return MFX_ERR_UNSUPPORTED;
-    }
-
-    // obtain card's parameters
-    m_vendorID = dxvaDevice.GetVendorID();
-    m_deviceID = dxvaDevice.GetDeviceID();
 
     DISPATCHER_LOG_INFO((("Inspecting %s\\%S\n"),
                    (MFX_LOCAL_MACHINE_KEY == storageID) ? ("HKEY_LOCAL_MACHINE") : ("HKEY_CURRENT_USER"),
@@ -177,8 +205,9 @@ mfxStatus MFXLibraryIterator::Init(eMfxImplType implType, mfxIMPL implInterface,
 
 } // mfxStatus MFXLibraryIterator::Init(eMfxImplType implType, const mfxU32 adapterNum, int storageID)
 
-mfxStatus MFXLibraryIterator::SelectDLLVersion(wchar_t *pPath, size_t pathSize,
-                                               eMfxImplType *pImplType, mfxVersion minVersion)
+mfxStatus MFXLibraryIterator::SelectDLLVersion(wchar_t *pPath
+                                             , size_t pathSize
+                                             , eMfxImplType *pImplType, mfxVersion minVersion)
 {
     wchar_t libPath[MFX_MAX_DLL_PATH];
     DWORD libIndex = 0;
@@ -188,33 +217,33 @@ mfxStatus MFXLibraryIterator::SelectDLLVersion(wchar_t *pPath, size_t pathSize,
 
     // main query cycle
     index = 0;
+    m_bIsSubKeyValid = false;
     do
     {
         WinRegKey subKey;
-        wchar_t subKeyName[MFX_MAX_VALUE_NAME];
-        DWORD subKeyNameSize = sizeof(subKeyName) / sizeof(subKeyName[0]);
+        DWORD subKeyNameSize = sizeof(m_SubKeyName) / sizeof(*m_SubKeyName);
 
         // query next value name
-        enumRes = m_baseRegKey.EnumKey(index, subKeyName, &subKeyNameSize);
+        enumRes = m_baseRegKey.EnumKey(index, m_SubKeyName, &subKeyNameSize);
         if (!enumRes)
         {
             DISPATCHER_LOG_WRN((("no more subkeys : RegEnumKeyExA()==0x%x\n"), GetLastError()))
         }
         else
         {
-            DISPATCHER_LOG_INFO((("found subkey: %S\n"), subKeyName))
+            DISPATCHER_LOG_INFO((("found subkey: %S\n"), m_SubKeyName))
 
             bool bRes;
 
             // open the sub key
-            bRes = subKey.Open(m_baseRegKey, subKeyName, KEY_READ);
+            bRes = subKey.Open(m_baseRegKey, m_SubKeyName, KEY_READ);
             if (!bRes)
             {
-                DISPATCHER_LOG_WRN((("error opening key %S :RegOpenKeyExA()==0x%x\n"), subKeyName, GetLastError()));
+                DISPATCHER_LOG_WRN((("error opening key %S :RegOpenKeyExA()==0x%x\n"), m_SubKeyName, GetLastError()));
             }
             else
             {
-                DISPATCHER_LOG_INFO((("opened key: %S\n"), subKeyName));
+                DISPATCHER_LOG_INFO((("opened key: %S\n"), m_SubKeyName));
 
                 mfxU32 vendorID = 0, deviceID = 0, merit = 0, version;
                 DWORD size;
@@ -402,6 +431,7 @@ mfxStatus MFXLibraryIterator::SelectDLLVersion(wchar_t *pPath, size_t pathSize,
 
     m_lastLibIndex = libIndex;
     m_lastLibMerit = libMerit;
+    m_bIsSubKeyValid = true;
 
     return MFX_ERR_NONE;
 
@@ -412,5 +442,11 @@ mfxIMPL MFXLibraryIterator::GetImplementationType()
     return m_implInterface;
 } // mfxIMPL MFXLibraryIterator::GetImplementationType()
 
+bool MFXLibraryIterator::GetSubKeyName( const msdk_disp_char *&subKeyName )const
+{
+    subKeyName = m_SubKeyName;
+    return m_bIsSubKeyValid;
+}
 } // namespace MFX
+#endif // #if defined(_WIN32) || defined(_WIN64)
 
