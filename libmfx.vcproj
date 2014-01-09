@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="Windows-1252"?>
 <VisualStudioProject
 	ProjectType="Visual C++"
-	Version="8.00"
+	Version="8,00"
 	Name="libmfx"
 	ProjectGUID="{9E7B3527-11AA-46BA-A82F-C58761F9B56F}"
 	RootNamespace="libmfx"
@@ -45,7 +45,7 @@
 			<Tool
 				Name="VCCLCompilerTool"
 				Optimization="0"
-				AdditionalIncludeDirectories="include;../../include"
+				AdditionalIncludeDirectories="include;../../include;$(INTELMEDIASDK_WINSDK_PATH)/include;$(INTELMEDIASDK_WINSDK_PATH)/include/shared;$(INTELMEDIASDK_WINSDK_PATH)/include/um"
 				PreprocessorDefinitions="WIN32;_DEBUG;_LIB;MFX_VA"
 				ExceptionHandling="2"
 				RuntimeLibrary="1"
@@ -107,7 +107,7 @@
 			<Tool
 				Name="VCCLCompilerTool"
 				Optimization="0"
-				AdditionalIncludeDirectories="include;../../include"
+				AdditionalIncludeDirectories="include;../../include;$(INTELMEDIASDK_WINSDK_PATH)/include;$(INTELMEDIASDK_WINSDK_PATH)/include/shared;$(INTELMEDIASDK_WINSDK_PATH)/include/um"
 				PreprocessorDefinitions="WIN64;_DEBUG;_LIB;MFX_VA"
 				MinimalRebuild="true"
 				BasicRuntimeChecks="3"
@@ -174,7 +174,7 @@
 				InlineFunctionExpansion="2"
 				EnableIntrinsicFunctions="true"
 				FavorSizeOrSpeed="1"
-				AdditionalIncludeDirectories="include;../../include"
+				AdditionalIncludeDirectories="include;../../include;$(INTELMEDIASDK_WINSDK_PATH)/include;$(INTELMEDIASDK_WINSDK_PATH)/include/shared;$(INTELMEDIASDK_WINSDK_PATH)/include/um"
 				PreprocessorDefinitions="WIN32;NDEBUG;_LIB;MFX_VA"
 				ExceptionHandling="2"
 				RuntimeLibrary="0"
@@ -194,6 +194,8 @@
 			<Tool
 				Name="VCLibrarianTool"
 				OutputFile="$(OutDir)\lib\$(ProjectName).lib"
+				ModuleDefinitionFile=""
+				IgnoreAllDefaultLibraries="false"
 			/>
 			<Tool
 				Name="VCALinkTool"
@@ -240,7 +242,7 @@
 				InlineFunctionExpansion="2"
 				EnableIntrinsicFunctions="true"
 				FavorSizeOrSpeed="1"
-				AdditionalIncludeDirectories="include;../../include"
+				AdditionalIncludeDirectories="include;../../include;$(INTELMEDIASDK_WINSDK_PATH)/include;$(INTELMEDIASDK_WINSDK_PATH)/include/shared;$(INTELMEDIASDK_WINSDK_PATH)/include/um"
 				PreprocessorDefinitions="WIN64;NDEBUG;_LIB;MFX_VA"
 				ExceptionHandling="2"
 				RuntimeLibrary="0"
@@ -260,6 +262,7 @@
 			<Tool
 				Name="VCLibrarianTool"
 				OutputFile="$(OutDir)\lib\$(ProjectName).lib"
+				ModuleDefinitionFile=""
 			/>
 			<Tool
 				Name="VCALinkTool"
@@ -305,7 +308,7 @@
 				InlineFunctionExpansion="2"
 				EnableIntrinsicFunctions="true"
 				FavorSizeOrSpeed="1"
-				AdditionalIncludeDirectories="include;../../include"
+				AdditionalIncludeDirectories="include;../../include;$(INTELMEDIASDK_WINSDK_PATH)/include;$(INTELMEDIASDK_WINSDK_PATH)/include/shared;$(INTELMEDIASDK_WINSDK_PATH)/include/um"
 				PreprocessorDefinitions="WIN32;NDEBUG;_LIB;MFX_VA"
 				ExceptionHandling="2"
 				RuntimeLibrary="2"
@@ -371,7 +374,7 @@
 				InlineFunctionExpansion="2"
 				EnableIntrinsicFunctions="true"
 				FavorSizeOrSpeed="1"
-				AdditionalIncludeDirectories="include;../../include"
+				AdditionalIncludeDirectories="include;../../include;$(INTELMEDIASDK_WINSDK_PATH)/include;$(INTELMEDIASDK_WINSDK_PATH)/include/shared;$(INTELMEDIASDK_WINSDK_PATH)/include/um"
 				PreprocessorDefinitions="WIN64;NDEBUG;_LIB;MFX_VA"
 				ExceptionHandling="2"
 				RuntimeLibrary="2"
@@ -448,6 +451,14 @@
 				>
 			</File>
 			<File
+				RelativePath=".\src\mfx_load_plugin.cpp"
+				>
+			</File>
+			<File
+				RelativePath=".\src\mfx_plugin_hive.cpp"
+				>
+			</File>
+			<File
 				RelativePath=".\src\mfx_win_reg_key.cpp"
 				>
 			</File>
@@ -461,6 +472,10 @@
 			</File>
 			<File
 				RelativePath=".\include\mfx_dispatcher.h"
+				>
+			</File>
+			<File
+				RelativePath=".\include\mfx_dispatcher_defs.h"
 				>
 			</File>
 			<File
@@ -481,6 +496,18 @@
 			</File>
 			<File
 				RelativePath=".\include\mfx_load_dll.h"
+				>
+			</File>
+			<File
+				RelativePath=".\include\mfx_load_plugin.h"
+				>
+			</File>
+			<File
+				RelativePath=".\include\mfx_plugin_hive.h"
+				>
+			</File>
+			<File
+				RelativePath=".\include\mfx_vector.h"
 				>
 			</File>
 			<File
