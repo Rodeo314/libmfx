@@ -72,8 +72,18 @@ public:
         return Query(pValueName, RegKey<T>::type, (LPBYTE) &data, &size);
     }
 
-    template<>
-    bool Query<bool>(const wchar_t *pValueName, bool &data ) {
+    /*
+     * template<>
+     * bool Query<bool>(const wchar_t *pValueName, bool &data ) {
+     *
+     * GCC fails to compile the above with:
+     * error: explicit specialization in non-namespace scope 'class MFX::WinRegKey'
+     * error: template-id 'Query<bool>' in declaration of primary template
+     *
+     * I think this should still work because a non-template function with the
+     * right signature should get picked before any template function.
+     */
+    bool Query(const wchar_t *pValueName, bool &data) {
         mfxU32 value = 0;
         bool bRes = Query(pValueName, value);
         data = (1 == value);
