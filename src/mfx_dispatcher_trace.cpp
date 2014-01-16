@@ -28,6 +28,8 @@ File Name: mfx_dispatcher_trace.cpp
 
 \* ****************************************************************************** */
 
+#if defined(MFX_DISPATCHER_LOG)
+
 #include <mfx_dispatcher.h>
 #include "mfx_dispatcher_log.h"
 #include <memory>
@@ -210,3 +212,5 @@ int main(int argc, const char *argv[], bool bUsePrefix)
     return 0;
 
 } // int main(int argc, const char *argv[])
+
+#endif// defined(MFX_DISPATCHER_LOG)
