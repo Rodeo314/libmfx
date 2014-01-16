@@ -39,6 +39,11 @@ typedef wchar_t  msdk_disp_char;
 #define msdk_disp_char_cpy_s(to, to_size, from) strcpy(to, from)
 #endif
 
+#ifdef __MINGW32__
+#define  sscanf_s  sscanf
+#define swscanf_s swscanf
+#endif
+
 // declare library module's handle
 typedef void * mfxModuleHandle;
 
