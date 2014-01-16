@@ -125,12 +125,11 @@ mfxModuleHandle mfx_dll_load(const msdk_disp_char *pFileName)
     }
 
     // set the silent error mode
-    DWORD prevErrorMode = 0;
-    SetThreadErrorMode(SEM_FAILCRITICALERRORS, &prevErrorMode);
+    UINT prevErrorMode = SetErrorMode(SEM_FAILCRITICALERRORS);
     // load the library's module
     hModule = LoadLibraryW(pFileName);
     // set the previous error mode
-    SetThreadErrorMode(prevErrorMode, NULL);
+    SetErrorMode(prevErrorMode);
 
     return hModule;
 
@@ -169,12 +168,11 @@ mfxModuleHandle mfx_get_dll_handle(const msdk_disp_char *pFileName)
     }
 
     // set the silent error mode
-    DWORD prevErrorMode = 0;
-    SetThreadErrorMode(SEM_FAILCRITICALERRORS, &prevErrorMode);
+    UINT prevErrorMode = SetErrorMode(SEM_FAILCRITICALERRORS);
     // load the library's module
     GetModuleHandleExW(0, pFileName, (HMODULE*) &hModule);
     // set the previous error mode
-    SetThreadErrorMode(prevErrorMode, NULL);
+    SetErrorMode(prevErrorMode);
 
     return hModule;
 }
