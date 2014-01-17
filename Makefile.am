@@ -1,4 +1,4 @@
-INCLUDES = -I./include/msdk/include/ -I./include 
+AM_CPPFLAGS = -I./include/msdk/include/ -I./include 
 
 library_includedir=$(includedir)/msdk/
 library_include_HEADERS =                 \
