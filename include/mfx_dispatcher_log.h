@@ -1,6 +1,6 @@
 /* ****************************************************************************** *\
 
-Copyright (C) 2012-2013 Intel Corporation.  All rights reserved.
+Copyright (C) 2012-2014 Intel Corporation.  All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
 modification, are permitted provided that the following conditions are met:
@@ -221,7 +221,7 @@ struct  DispatcherLogBracketsHelper
         ,m_opcode(opcode)
     {
     }
-    void Write(char * str, ...);
+    void Write(const char * str, ...);
 } ;
 
 //auto log on ctor dtor
@@ -263,7 +263,7 @@ class FileSink
 {
     friend class DSSingleTone<FileSink>;
 public:
-    virtual void Write(int level, int opcode, char * msg, va_list argptr);
+    virtual void Write(int level, int opcode, const char * msg, va_list argptr);
     ~FileSink()
     {
         if (NULL != m_hdl)

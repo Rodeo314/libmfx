@@ -15,7 +15,8 @@ library_include_HEADERS =                 \
 	include/msdk/include/mfxstructures.h  \
 	include/msdk/include/mfxvideo.h       \
 	include/msdk/include/mfxvideo++.h     \
-	include/msdk/include/mfxvstructures.h
+	include/msdk/include/mfxvstructures.h \
+	include/msdk/include/mfxenc.h
 
 AM_CXXFLAGS = -Wall -Wextra -DMINGW_HAS_SECURE_API=1 
 #-DMFX_DISPATCHER_LOG=1 
@@ -27,7 +28,6 @@ libmfx_la_SOURCES =              \
 	src/mfx_critical_section.cpp \
 	src/mfx_dispatcher.cpp       \
 	src/mfx_dispatcher_log.cpp   \
-	src/mfx_dispatcher_trace.cpp \
 	src/mfx_dxva2_device.cpp     \
 	src/mfx_function_table.cpp   \
 	src/mfx_library_iterator.cpp \

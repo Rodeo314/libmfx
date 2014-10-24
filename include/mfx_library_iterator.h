@@ -1,6 +1,6 @@
 /* ****************************************************************************** *\
 
-Copyright (C) 2012-2013 Intel Corporation.  All rights reserved.
+Copyright (C) 2012-2014 Intel Corporation.  All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
 modification, are permitted provided that the following conditions are met:
@@ -43,7 +43,13 @@ struct mfx_disp_adapters
     mfxU32 device_id;
 };
 
+#ifndef __APPLE__
 #define MFX_SO_BASE_NAME_LEN 15 // sizeof("libmfxhw32-p.so") = 15
+#else
+
+#define MFX_SO_BASE_NAME_LEN 16 // sizeof("libmfxhw64.dylib") = 16
+#endif
+
 #define MFX_MIN_REAL_LIBNAME MFX_SO_BASE_NAME_LEN + 4 // sizeof("libmfxhw32-p.so.0.0") >= 19
 #define MFX_MAX_REAL_LIBNAME MFX_MIN_REAL_LIBNAME + 8 // sizeof("libmfxhw32-p.so.<mj>.<mn>") <= 27, max(sizeof(<mj>))=sizeof(0xFFFF) = sizeof(65535) = 5
 
@@ -64,6 +70,7 @@ enum
     MFX_UNKNOWN_KEY             = -1,
     MFX_CURRENT_USER_KEY        = 0,
     MFX_LOCAL_MACHINE_KEY       = 1,
+    MFX_APP_FOLDER              = 2,
 
     MFX_STORAGE_ID_FIRST    = MFX_CURRENT_USER_KEY,
     MFX_STORAGE_ID_LAST     = MFX_LOCAL_MACHINE_KEY
@@ -71,10 +78,12 @@ enum
 #else
 enum
 {
+    MFX_UNKNOWN_KEY     = -1,
     MFX_STORAGE_ID_OPT  = 0, // storage is: /opt/intel
+    MFX_APP_FOLDER      = 1,
 
-    MFX_STORAGE_ID_FIRST    = MFX_STORAGE_ID_OPT,
-    MFX_STORAGE_ID_LAST     = MFX_STORAGE_ID_OPT
+    MFX_STORAGE_ID_FIRST   =  MFX_STORAGE_ID_OPT,
+    MFX_STORAGE_ID_LAST    = MFX_STORAGE_ID_OPT
 };
 #endif
 
@@ -99,7 +108,7 @@ public:
     mfxIMPL GetImplementationType(); 
 
     // Retrun registry subkey name on which dll was selected after sucesfull call to selectDllVesion
-    bool GetSubKeyName(const msdk_disp_char *&subKeyName) const;
+    bool GetSubKeyName(msdk_disp_char *subKeyName, size_t length) const;
 
     int  GetStorageID() const { return m_StorageID; }
 protected:
@@ -107,13 +116,19 @@ protected:
     // Release the iterator
     void Release(void);
 
+    // Initialize the registry iterator
+    mfxStatus InitRegistry(eMfxImplType implType, mfxIMPL implInterface, const mfxU32 adapterNum, int storageID);
+    // Initialize the app folder iterator
+    mfxStatus InitFolder(eMfxImplType implType, mfxIMPL implInterface, const mfxU32 adapterNum, const msdk_disp_char * path);
+
+
     eMfxImplType m_implType;                                    // Required library implementation 
     mfxIMPL m_implInterface;                                    // Required interface (D3D9, D3D11)
 
     mfxU32 m_vendorID;                                          // (mfxU32) property of used graphic card
     mfxU32 m_deviceID;                                          // (mfxU32) property of used graphic card
     bool   m_bIsSubKeyValid;
-    wchar_t m_SubKeyName[MFX_MAX_VALUE_NAME];                   // registry subkey for selected module loaded 
+    wchar_t m_SubKeyName[MFX_MAX_REGISTRY_KEY_NAME];            // registry subkey for selected module loaded 
     int    m_StorageID;
     
 #if defined(_WIN32) || defined(_WIN64)
@@ -128,8 +143,10 @@ protected:
     struct mfx_disp_adapters* m_adapters;
     mfxU32 m_libs_num;
     struct mfx_libs* m_libs;
-    char m_path[260];
 #endif // #if defined(_WIN32) || defined(_WIN64)
+
+    msdk_disp_char  m_path[260];
+
 private:
     // unimplemented by intent to make this class non-copyable
     MFXLibraryIterator(const MFXLibraryIterator &);

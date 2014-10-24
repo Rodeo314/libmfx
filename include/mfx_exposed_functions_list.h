@@ -1,6 +1,6 @@
 /* ****************************************************************************** *\
 
-Copyright (C) 2012-2013 Intel Corporation.  All rights reserved.
+Copyright (C) 2012-2014 Intel Corporation.  All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
 modification, are permitted provided that the following conditions are met:
@@ -36,13 +36,17 @@ File Name: mfx_exposed_functions_list.h
 // Please, do no try to fix it.
 //
 
+
+
+// Use define API_VERSION to set the API of functions listed further
+// When new functions are added new section with functions declarations must be started with updated define
+
 //
 // API version 1.0 functions
 //
 
-// Minor value should precedes the major value
+// API version where a function is added. Minor value should precedes the major value
 #define API_VERSION {{0, 1}}
-#define API_VERSION_PREV {{0, 0}}
 
 // CORE interface functions
 FUNCTION(mfxStatus, MFXVideoCORE_SetBufferAllocator, (mfxSession session, mfxBufferAllocator *allocator), (session, allocator))
@@ -89,22 +93,32 @@ FUNCTION(mfxStatus, MFXVideoVPP_GetVPPStat, (mfxSession session, mfxVPPStat *sta
 FUNCTION(mfxStatus, MFXVideoVPP_RunFrameVPPAsync, (mfxSession session, mfxFrameSurface1 *in, mfxFrameSurface1 *out, mfxExtVppAuxData *aux, mfxSyncPoint *syncp), (session, in, out, aux, syncp))
 
 #undef API_VERSION
-#undef API_VERSION_PREV
 
 //
 // API version 1.1 functions
 //
 
-// Use the defines to set the current API version, until new functions are added.
-// When new functions are added, API_VERSION must be fixed with the previous
-// VERSION values and new section with functions declarations must be started.
-
 #define API_VERSION {{1, 1}}
-#define API_VERSION_PREV {{0, 1}}
 
 FUNCTION(mfxStatus, MFXVideoUSER_Register, (mfxSession session, mfxU32 type, const mfxPlugin *par), (session, type, par))
 FUNCTION(mfxStatus, MFXVideoUSER_Unregister, (mfxSession session, mfxU32 type), (session, type))
 FUNCTION(mfxStatus, MFXVideoUSER_ProcessFrameAsync, (mfxSession session, const mfxHDL *in, mfxU32 in_num, const mfxHDL *out, mfxU32 out_num, mfxSyncPoint *syncp), (session, in, in_num, out, out_num, syncp))
 
 #undef API_VERSION
-#undef API_VERSION_PREV
+
+//
+// API version 1.10 functions
+//
+
+#define API_VERSION {{10, 1}}
+
+FUNCTION(mfxStatus, MFXVideoENC_Query,(mfxSession session, mfxVideoParam *in, mfxVideoParam *out), (session,in,out))
+FUNCTION(mfxStatus, MFXVideoENC_QueryIOSurf,(mfxSession session, mfxVideoParam *par, mfxFrameAllocRequest *request), (session,par,request))
+FUNCTION(mfxStatus, MFXVideoENC_Init,(mfxSession session, mfxVideoParam *par), (session,par))
+FUNCTION(mfxStatus, MFXVideoENC_Reset,(mfxSession session, mfxVideoParam *par), (session,par))
+FUNCTION(mfxStatus, MFXVideoENC_Close,(mfxSession session),(session))
+FUNCTION(mfxStatus, MFXVideoENC_ProcessFrameAsync,(mfxSession session, mfxENCInput *in, mfxENCOutput *out, mfxSyncPoint *syncp),(session,in,out,syncp))
+
+FUNCTION(mfxStatus, MFXVideoVPP_RunFrameVPPAsyncEx, (mfxSession session, mfxFrameSurface1 *in, mfxFrameSurface1 *work, mfxFrameSurface1 **out, mfxSyncPoint *syncp), (session, in, work, out, syncp))
+
+#undef API_VERSION

@@ -1,6 +1,6 @@
 /* ****************************************************************************** *\
 
-Copyright (C) 2013 Intel Corporation.  All rights reserved.
+Copyright (C) 2013-2014 Intel Corporation.  All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
 modification, are permitted provided that the following conditions are met:
@@ -37,12 +37,11 @@ File Name: mfxaudio_exposed_function_list.h
 //
 
 //
-// API version 1.0 functions
+// API version 1.8 functions
 //
 
 // Minor value should precedes the major value
-#define API_VERSION {{MFX_AUDIO_VERSION_MINOR, MFX_AUDIO_VERSION_MAJOR}}
-#define API_VERSION_PREV {{0, 0}}
+#define API_VERSION {{8, 1}}
 
 // CORE interface functions
 FUNCTION(mfxStatus, MFXAudioCORE_SyncOperation, (mfxSession session, mfxSyncPoint syncp, mfxU32 wait), (session, syncp, wait))
@@ -67,4 +66,3 @@ FUNCTION(mfxStatus, MFXAudioDECODE_GetAudioParam, (mfxSession session, mfxAudioP
 FUNCTION(mfxStatus, MFXAudioDECODE_DecodeFrameAsync, (mfxSession session, mfxBitstream *bs, mfxAudioFrame *frame_out, mfxSyncPoint *syncp), (session, bs, frame_out, syncp))
 
 #undef API_VERSION
-#undef API_VERSION_PREV

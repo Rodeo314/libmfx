@@ -1,6 +1,6 @@
 /* ****************************************************************************** *\
 
-Copyright (C) 2012-2013 Intel Corporation.  All rights reserved.
+Copyright (C) 2012-2014 Intel Corporation.  All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
 modification, are permitted provided that the following conditions are met:
@@ -36,6 +36,10 @@ File Name: mfx_library_iterator.cpp
 #include "mfx_dispatcher_log.h"
 
 #include "mfx_dxva2_device.h"
+#include "mfx_load_dll.h"
+
+#include <tchar.h>
+#include <windows.h>
 
 namespace MFX
 {
@@ -125,6 +129,7 @@ mfxStatus GetImplementationType(const mfxU32 adapterNum, mfxIMPL *pImplInterface
 MFXLibraryIterator::MFXLibraryIterator(void)
 {
     m_implType = MFX_LIB_PSEUDO;
+    m_implInterface = MFX_IMPL_UNSUPPORTED;
 
     m_vendorID = 0;
     m_deviceID = 0;
@@ -134,6 +139,8 @@ MFXLibraryIterator::MFXLibraryIterator(void)
 
     m_bIsSubKeyValid = 0;
     m_StorageID = 0;
+
+    m_SubKeyName[0] = 0;
 } // MFXLibraryIterator::MFXLibraryIterator(void)
 
 MFXLibraryIterator::~MFXLibraryIterator(void)
@@ -145,20 +152,19 @@ MFXLibraryIterator::~MFXLibraryIterator(void)
 void MFXLibraryIterator::Release(void)
 {
     m_implType = MFX_LIB_PSEUDO;
+    m_implInterface = MFX_IMPL_UNSUPPORTED;
 
     m_vendorID = 0;
     m_deviceID = 0;
 
     m_lastLibIndex = 0;
     m_lastLibMerit = MFX_MAX_MERIT;
+    m_SubKeyName[0] = 0;
 
 } // void MFXLibraryIterator::Release(void)
 
 mfxStatus MFXLibraryIterator::Init(eMfxImplType implType, mfxIMPL implInterface, const mfxU32 adapterNum, int storageID)
 {
-    HKEY rootHKey;
-    bool bRes;
-
     // check error(s)
     if ((MFX_LIB_SOFTWARE != implType) &&
         (MFX_LIB_HARDWARE != implType))
@@ -168,27 +174,54 @@ mfxStatus MFXLibraryIterator::Init(eMfxImplType implType, mfxIMPL implInterface,
 
     // release the object before initialization
     Release();
+    m_StorageID = storageID;
+    m_lastLibIndex = 0;
+
+    if (storageID == MFX_CURRENT_USER_KEY || storageID == MFX_LOCAL_MACHINE_KEY)
+    {
+        return InitRegistry(implType, implInterface, adapterNum, storageID);
+    }
+    else if (storageID == MFX_APP_FOLDER)
+    {
+        msdk_disp_char path[_MAX_PATH] = {};
+
+        ::GetModuleFileNameW(0, path, _MAX_PATH);
+        msdk_disp_char * dirSeparator = wcsrchr(path, L'\\');
+        if (dirSeparator < (path + _MAX_PATH))
+        {
+            *++dirSeparator = 0;
+        }        
+        
+        return InitFolder(implType, implInterface, adapterNum, path);
+    }
+
+    return MFX_ERR_UNSUPPORTED;
+} // mfxStatus MFXLibraryIterator::Init(eMfxImplType implType, const mfxU32 adapterNum, int storageID)
+
+mfxStatus MFXLibraryIterator::InitRegistry(eMfxImplType implType, mfxIMPL implInterface, const mfxU32 adapterNum, int storageID)
+{
+    HKEY rootHKey;
+    bool bRes;
 
     // open required registry key
-    m_StorageID = storageID;
     rootHKey = (MFX_LOCAL_MACHINE_KEY == storageID) ? (HKEY_LOCAL_MACHINE) : (HKEY_CURRENT_USER);
     bRes = m_baseRegKey.Open(rootHKey, rootDispPath, KEY_READ);
     if (false == bRes)
     {
         DISPATCHER_LOG_WRN((("Can't open %s\\%S : RegOpenKeyExA()==0x%x\n"),
-                       (MFX_LOCAL_MACHINE_KEY == storageID) ? ("HKEY_LOCAL_MACHINE") : ("HKEY_CURRENT_USER"),
-                       rootDispPath, GetLastError()))
-        return MFX_ERR_UNKNOWN;
+            (MFX_LOCAL_MACHINE_KEY == storageID) ? ("HKEY_LOCAL_MACHINE") : ("HKEY_CURRENT_USER"),
+            rootDispPath, GetLastError()))
+            return MFX_ERR_UNKNOWN;
     }
 
     // set the required library's implementation type
     m_implType = implType;
     m_implInterface = implInterface != 0 
-                    ? implInterface
-                    : MFX_IMPL_VIA_ANY;
+        ? implInterface
+        : MFX_IMPL_VIA_ANY;
 
     //deviceID and vendorID are not actual for SW library loading
-    if (m_implInterface != MFX_LIB_SOFTWARE)
+    if (m_implType != MFX_LIB_SOFTWARE)
     {
         mfxStatus mfxRes = MFX::GetImplementationType(adapterNum, &m_implInterface, &m_vendorID, &m_deviceID);
         if (MFX_ERR_NONE != mfxRes)
@@ -198,18 +231,58 @@ mfxStatus MFXLibraryIterator::Init(eMfxImplType implType, mfxIMPL implInterface,
     }
 
     DISPATCHER_LOG_INFO((("Inspecting %s\\%S\n"),
-                   (MFX_LOCAL_MACHINE_KEY == storageID) ? ("HKEY_LOCAL_MACHINE") : ("HKEY_CURRENT_USER"),
-                   rootDispPath))
+        (MFX_LOCAL_MACHINE_KEY == storageID) ? ("HKEY_LOCAL_MACHINE") : ("HKEY_CURRENT_USER"),
+        rootDispPath))
 
     return MFX_ERR_NONE;
+} // mfxStatus MFXLibraryIterator::InitRegistry(eMfxImplType implType, mfxIMPL implInterface, const mfxU32 adapterNum, int storageID)
 
-} // mfxStatus MFXLibraryIterator::Init(eMfxImplType implType, const mfxU32 adapterNum, int storageID)
+mfxStatus MFXLibraryIterator::InitFolder(eMfxImplType implType, mfxIMPL implInterface, const mfxU32 adapterNum, const msdk_disp_char * path)
+{
+     const int maxPathLen = sizeof(m_path)/sizeof(m_path[0]);
+     m_path[0] = 0;
+     msdk_disp_char_cpy_s(m_path, maxPathLen, path);
+     size_t pathLen = wcslen(m_path);
+
+     // we looking for runtime in application folder, it should be named libmfxsw64 or libmfxsw32
+     mfx_get_default_dll_name(m_path + pathLen, maxPathLen - pathLen,  MFX_LIB_SOFTWARE);
+
+     // set the required library's implementation type
+     m_implType = implType;
+     m_implInterface = implInterface != 0 
+         ? implInterface
+         : MFX_IMPL_VIA_ANY;
+
+     //deviceID and vendorID are not actual for SW library loading
+     if (m_implType != MFX_LIB_SOFTWARE)
+     {
+         mfxStatus mfxRes = MFX::GetImplementationType(adapterNum, &m_implInterface, &m_vendorID, &m_deviceID);
+         if (MFX_ERR_NONE != mfxRes)
+         {
+             return mfxRes;
+         }
+     }
+     return MFX_ERR_NONE;
+} // mfxStatus MFXLibraryIterator::InitFolder(eMfxImplType implType, mfxIMPL implInterface, const mfxU32 adapterNum, const msdk_disp_char * path)
 
 mfxStatus MFXLibraryIterator::SelectDLLVersion(wchar_t *pPath
                                              , size_t pathSize
                                              , eMfxImplType *pImplType, mfxVersion minVersion)
 {
-    wchar_t libPath[MFX_MAX_DLL_PATH];
+    UNREFERENCED_PARAMETER(minVersion);
+
+    if (m_StorageID == MFX_APP_FOLDER)
+    {
+        if (m_lastLibIndex != 0)
+            return MFX_ERR_NOT_FOUND;
+
+        m_lastLibIndex = 1;
+        msdk_disp_char_cpy_s(pPath, pathSize, m_path);
+        *pImplType = MFX_LIB_SOFTWARE;
+        return MFX_ERR_NONE;
+    }
+
+    wchar_t libPath[MFX_MAX_DLL_PATH] = L"";
     DWORD libIndex = 0;
     DWORD libMerit = 0;
     DWORD index;
@@ -221,77 +294,48 @@ mfxStatus MFXLibraryIterator::SelectDLLVersion(wchar_t *pPath
     do
     {
         WinRegKey subKey;
-        DWORD subKeyNameSize = sizeof(m_SubKeyName) / sizeof(*m_SubKeyName);
+        wchar_t subKeyName[MFX_MAX_REGISTRY_KEY_NAME];
+        DWORD subKeyNameSize = sizeof(subKeyName) / sizeof(subKeyName[0]);
 
         // query next value name
-        enumRes = m_baseRegKey.EnumKey(index, m_SubKeyName, &subKeyNameSize);
+        enumRes = m_baseRegKey.EnumKey(index, subKeyName, &subKeyNameSize);
         if (!enumRes)
         {
             DISPATCHER_LOG_WRN((("no more subkeys : RegEnumKeyExA()==0x%x\n"), GetLastError()))
         }
         else
         {
-            DISPATCHER_LOG_INFO((("found subkey: %S\n"), m_SubKeyName))
+            DISPATCHER_LOG_INFO((("found subkey: %S\n"), subKeyName))
 
             bool bRes;
 
             // open the sub key
-            bRes = subKey.Open(m_baseRegKey, m_SubKeyName, KEY_READ);
+            bRes = subKey.Open(m_baseRegKey, subKeyName, KEY_READ);
             if (!bRes)
             {
-                DISPATCHER_LOG_WRN((("error opening key %S :RegOpenKeyExA()==0x%x\n"), m_SubKeyName, GetLastError()));
+                DISPATCHER_LOG_WRN((("error opening key %S :RegOpenKeyExA()==0x%x\n"), subKeyName, GetLastError()));
             }
             else
             {
-                DISPATCHER_LOG_INFO((("opened key: %S\n"), m_SubKeyName));
+                DISPATCHER_LOG_INFO((("opened key: %S\n"), subKeyName));
 
-                mfxU32 vendorID = 0, deviceID = 0, merit = 0, version;
+                mfxU32 vendorID = 0, deviceID = 0, merit = 0;
                 DWORD size;
 
-                // query version value
-                size = sizeof(version);
-                bRes = subKey.Query(apiVersionName, REG_DWORD, (LPBYTE) &version, &size);
-                if (!bRes)
-                {
-                    DISPATCHER_LOG_WRN((("querying %S : RegQueryValueExA()==0x%x\n"), apiVersionName, GetLastError()));
-                }
-                else
-                {
-                    mfxVersion libVersion;
-
-                    // there is complex conversion for registry stored version to
-                    // the mfxVersion structure
-                    libVersion.Minor = (mfxU16) (version & 0x0ff);
-                    libVersion.Major = (mfxU16) (version >> 8);
-
-                    if ((libVersion.Major != minVersion.Major) ||
-                        (libVersion.Minor < minVersion.Minor))
+                // query vendor and device IDs
+                size = sizeof(vendorID);
+                bRes = subKey.Query(vendorIDKeyName, REG_DWORD, (LPBYTE) &vendorID, &size);
+                DISPATCHER_LOG_OPERATION({
+                    if (bRes)
                     {
-                        // there is a version conflict
-                        bRes = false;
-                        DISPATCHER_LOG_WRN((("version conflict: loaded : %u.%u required = %u.%u\n"), libVersion.Major, libVersion.Minor, minVersion.Major, minVersion.Minor));
+                        DISPATCHER_LOG_INFO((("loaded %S : 0x%x\n"), vendorIDKeyName, vendorID));
                     }
                     else
                     {
-                        DISPATCHER_LOG_INFO((("loaded %S : %u.%u \n"), apiVersionName, libVersion.Major, libVersion.Minor));
+                        DISPATCHER_LOG_WRN((("querying %S : RegQueryValueExA()==0x%x\n"), vendorIDKeyName, GetLastError()));
                     }
-                }
-                // query vendor and device IDs
-                if (bRes)
-                {
-                    size = sizeof(vendorID);
-                    bRes = subKey.Query(vendorIDKeyName, REG_DWORD, (LPBYTE) &vendorID, &size);
-                    DISPATCHER_LOG_OPERATION({
-                        if (bRes)
-                        {
-                            DISPATCHER_LOG_INFO((("loaded %S : 0x%x\n"), vendorIDKeyName, vendorID));
-                        }
-                        else
-                        {
-                            DISPATCHER_LOG_WRN((("querying %S : RegQueryValueExA()==0x%x\n"), vendorIDKeyName, GetLastError()));
-                        }
-                    })
-                }
+                })
+
                 if (bRes)
                 {
                     size = sizeof(deviceID);
@@ -342,19 +386,6 @@ mfxStatus MFXLibraryIterator::SelectDLLVersion(wchar_t *pPath
                             DISPATCHER_LOG_WRN((("%S conflict, actual = 0x%x : required = 0x%x\n"), deviceIDKeyName, m_deviceID, deviceID));
                         }
                     }
-                    else if (MFX_LIB_SOFTWARE == m_implType)
-                    {
-                        if (0 != vendorID) 
-                        {
-                            bRes = false;
-                            DISPATCHER_LOG_WRN((("%S conflict, required = 0x%x shoul be 0 for software implementation\n"), vendorIDKeyName, vendorID));
-                        }
-                        if (bRes && 0 != deviceID)
-                        {
-                            bRes = false;
-                            DISPATCHER_LOG_WRN((("%S conflict, required = 0x%x should be 0 for software implementation\n"), deviceIDKeyName, deviceID));
-                        }
-                    }
 
                     DISPATCHER_LOG_OPERATION({
                     if (bRes)
@@ -372,7 +403,7 @@ mfxStatus MFXLibraryIterator::SelectDLLVersion(wchar_t *pPath
                         (libMerit < merit))
                     {
                         wchar_t tmpPath[MFX_MAX_DLL_PATH];
-                        DWORD tmpPathSize = sizeof(tmpPath) / sizeof(tmpPath[0]);
+                        DWORD tmpPathSize = sizeof(tmpPath);
 
                         bRes = subKey.Query(pathKeyName, REG_SZ, (LPBYTE) tmpPath, &tmpPathSize);
                         if (!bRes)
@@ -382,13 +413,9 @@ mfxStatus MFXLibraryIterator::SelectDLLVersion(wchar_t *pPath
                         else
                         {
                             DISPATCHER_LOG_INFO((("loaded %S : %S\n"), pathKeyName, tmpPath));
-                         
-                            // copy the library's path
-#if _MSC_VER >= 1400
-                            wcscpy_s(libPath, sizeof(libPath) / sizeof(libPath[0]), tmpPath);
-#else
-                            wcscpy(libPath, tmpPath);
-#endif
+
+                            msdk_disp_char_cpy_s(libPath, sizeof(libPath) / sizeof(libPath[0]), tmpPath);
+                            msdk_disp_char_cpy_s(m_SubKeyName, sizeof(m_SubKeyName) / sizeof(m_SubKeyName[0]), subKeyName);
 
                             libMerit = merit;
                             libIndex = index;
@@ -423,11 +450,7 @@ mfxStatus MFXLibraryIterator::SelectDLLVersion(wchar_t *pPath
         return MFX_ERR_NOT_FOUND;
     }
 
-#if _MSC_VER >= 1400
-    wcscpy_s(pPath, pathSize, libPath);
-#else
-    wcscpy(pPath, libPath);
-#endif
+    msdk_disp_char_cpy_s(pPath, pathSize, libPath);
 
     m_lastLibIndex = libIndex;
     m_lastLibMerit = libMerit;
@@ -442,9 +465,9 @@ mfxIMPL MFXLibraryIterator::GetImplementationType()
     return m_implInterface;
 } // mfxIMPL MFXLibraryIterator::GetImplementationType()
 
-bool MFXLibraryIterator::GetSubKeyName( const msdk_disp_char *&subKeyName )const
+bool MFXLibraryIterator::GetSubKeyName(msdk_disp_char *subKeyName, size_t length) const
 {
-    subKeyName = m_SubKeyName;
+    msdk_disp_char_cpy_s(subKeyName, length, m_SubKeyName);
     return m_bIsSubKeyValid;
 }
 } // namespace MFX

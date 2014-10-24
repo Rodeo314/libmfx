@@ -1,6 +1,6 @@
 /* ****************************************************************************** *\
 
-Copyright (C) 2013 Intel Corporation.  All rights reserved.
+Copyright (C) 2013-2014 Intel Corporation.  All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
 modification, are permitted provided that the following conditions are met:
@@ -68,10 +68,10 @@ MFX::PluginModule::PluginModule(const msdk_disp_char * path)
 {
     mHmodule = mfx_dll_load(path);
     if (NULL == mHmodule) {
-        TRACE_PLUGIN_ERROR("Cannot load module: %S\n", path);
+        TRACE_PLUGIN_ERROR("Cannot load module: %S\n", MSDK2WIDE(path));
         return ;
     }
-    TRACE_PLUGIN_INFO("Plugin loaded at: %S\n", path);
+    TRACE_PLUGIN_INFO("Plugin loaded at: %S\n", MSDK2WIDE(path));
     
     mCreatePluginPtr = (CreatePluginPtr_t)mfx_dll_get_addr(mHmodule, CREATE_PLUGIN_FNC);
     if (NULL == mCreatePluginPtr) {
@@ -90,9 +90,9 @@ bool MFX::PluginModule::Create( mfxPluginUID uid, mfxPlugin& plg)
         mfxStatus mfxResult = mCreatePluginPtr(uid, &plg);
         result = (MFX_ERR_NONE == mfxResult);
         if (!result) {
-            TRACE_PLUGIN_ERROR("\"%S::%s\" returned %d\n", mPath, CREATE_PLUGIN_FNC, mfxResult);
+            TRACE_PLUGIN_ERROR("\"%S::%s\" returned %d\n", MSDK2WIDE(mPath), CREATE_PLUGIN_FNC, mfxResult);
         } else {
-            TRACE_PLUGIN_INFO("\"%S::%s\" SUCCEED\n", mPath, CREATE_PLUGIN_FNC);
+            TRACE_PLUGIN_INFO("\"%S::%s\" SUCCEED\n", MSDK2WIDE(mPath), CREATE_PLUGIN_FNC);
         }
     }
     return result;
@@ -146,38 +146,51 @@ bool MFX::MFXPluginFactory::RunVerification( const mfxPlugin & plg, const Plugin
         return false;
     }
 
-    if (!dsc.onlyVersionRegistered && pluginParams.CodecId != dsc.CodecId) 
+    if (dsc.Default)
     {
-        TRACE_PLUGIN_ERROR("plg->GetPluginParam() returned CodecId="MFXFOURCCTYPE()", but registration has CodecId="MFXFOURCCTYPE()"\n"
-            , MFXU32TOFOURCC(pluginParams.CodecId), MFXU32TOFOURCC(dsc.CodecId));
-        return false;
+        // for default plugins there is no description, dsc.APIVersion, dsc.PluginVersion and dsc.PluginUID were set by dispatcher
+        // dsc.PluginVersion == requested plugin version (parameter of MFXVideoUSER_Load); dsc.APIVersion == loaded library API
+        if (dsc.PluginVersion > pluginParams.PluginVersion)
+        {
+            TRACE_PLUGIN_ERROR("plg->GetPluginParam() returned PluginVersion=%d, but it is smaller than requested : %d\n", pluginParams.PluginVersion, dsc.PluginVersion);
+            return false;
+        }
     }
-
-    if (!dsc.onlyVersionRegistered && pluginParams.Type != dsc.Type) 
+    else
     {
-        TRACE_PLUGIN_ERROR("plg->GetPluginParam() returned Type=%d, but registration has Type=%d\n", pluginParams.Type, dsc.Type);
-        return false;
-    }
+        if (!dsc.onlyVersionRegistered && pluginParams.CodecId != dsc.CodecId) 
+        {
+            TRACE_PLUGIN_ERROR("plg->GetPluginParam() returned CodecId="MFXFOURCCTYPE()", but registration has CodecId="MFXFOURCCTYPE()"\n"
+                , MFXU32TOFOURCC(pluginParams.CodecId), MFXU32TOFOURCC(dsc.CodecId));
+            return false;
+        }
 
-    if (pluginParams.PluginUID !=  dsc.PluginUID) 
-    {
-        TRACE_PLUGIN_ERROR("plg->GetPluginParam() returned UID="MFXGUIDTYPE()", but registration has UID="MFXGUIDTYPE()"\n"
-            , MFXGUIDTOHEX(&pluginParams.PluginUID), MFXGUIDTOHEX(&dsc.PluginUID));
-        return false;
-    }
+        if (!dsc.onlyVersionRegistered && pluginParams.Type != dsc.Type) 
+        {
+            TRACE_PLUGIN_ERROR("plg->GetPluginParam() returned Type=%d, but registration has Type=%d\n", pluginParams.Type, dsc.Type);
+            return false;
+        }
 
-    if (pluginParams.PluginVersion != dsc.PluginVersion) 
-    {
-        TRACE_PLUGIN_ERROR("plg->GetPluginParam() returned PluginVersion=%d, but registration has PlgVer=%d\n", pluginParams.PluginVersion, dsc.PluginVersion);
-        return false;
-    }
+        if (pluginParams.PluginUID !=  dsc.PluginUID) 
+        {
+            TRACE_PLUGIN_ERROR("plg->GetPluginParam() returned UID="MFXGUIDTYPE()", but registration has UID="MFXGUIDTYPE()"\n"
+                , MFXGUIDTOHEX(&pluginParams.PluginUID), MFXGUIDTOHEX(&dsc.PluginUID));
+            return false;
+        }
 
-    if (pluginParams.APIVersion.Version != dsc.APIVersion.Version)
-    {
-        TRACE_PLUGIN_ERROR("plg->GetPluginParam() returned APIVersion=%d.%d, but registration has APIVer=%d.%d\n"
-            , pluginParams.APIVersion.Major, pluginParams.APIVersion.Minor
-            , dsc.APIVersion.Major, dsc.APIVersion.Minor);
-        return false;
+        if (pluginParams.PluginVersion != dsc.PluginVersion) 
+        {
+            TRACE_PLUGIN_ERROR("plg->GetPluginParam() returned PluginVersion=%d, but registration has PlgVer=%d\n", pluginParams.PluginVersion, dsc.PluginVersion);
+            return false;
+        }
+
+        if (pluginParams.APIVersion.Version != dsc.APIVersion.Version)
+        {
+            TRACE_PLUGIN_ERROR("plg->GetPluginParam() returned APIVersion=%d.%d, but registration has APIVer=%d.%d\n"
+                , pluginParams.APIVersion.Major, pluginParams.APIVersion.Minor
+                , dsc.APIVersion.Major, dsc.APIVersion.Minor);
+            return false;
+        }
     }
 
     switch(pluginParams.Type) 
@@ -203,10 +216,12 @@ bool MFX::MFXPluginFactory::RunVerification( const mfxPlugin & plg, const Plugin
     {
         case MFX_PLUGINTYPE_VIDEO_DECODE: 
             return VerifyDecoder(*plg.Video);
-        case MFX_PLUGINTYPE_VIDEO_ENCODE: 
+        case MFX_PLUGINTYPE_VIDEO_ENCODE:        
             return VerifyEncoder(*plg.Video);
         case MFX_PLUGINTYPE_VIDEO_VPP: 
-            return VerifyVpp(*plg.Video);        
+            return VerifyVpp(*plg.Video); 
+        case MFX_PLUGINTYPE_VIDEO_ENC:
+            return VerifyEnc(*plg.Video);
         default: 
         {
             TRACE_PLUGIN_ERROR("unsupported plugin type: %d\n", pluginParams.Type);
@@ -235,6 +250,17 @@ bool MFX::MFXPluginFactory::VerifyEncoder( const mfxVideoCodecPlugin &encoder )
         return false;
     }
     
+    return true;
+}
+
+bool MFX::MFXPluginFactory::VerifyEnc( const mfxVideoCodecPlugin &videoEnc )
+{
+    if (videoEnc.ENCFrameSubmit == 0)
+    {
+        TRACE_PLUGIN_ERROR("plg->Video->EncodeFrameSubmit = 0\n", 0);
+        return false;
+    }
+
     return true;
 }
 

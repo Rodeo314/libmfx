@@ -1,6 +1,6 @@
 /* ****************************************************************************** *\
 
-Copyright (C) 2012-2013 Intel Corporation.  All rights reserved.
+Copyright (C) 2012-2014 Intel Corporation.  All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
 modification, are permitted provided that the following conditions are met:
@@ -46,8 +46,10 @@ MFX_DISP_HANDLE::MFX_DISP_HANDLE(const mfxVersion requiredVersion) :
     apiVersion(requiredVersion),
     pluginFactory((mfxSession)this)
 {
+    actualApiVersion.Version = 0;
     implType = MFX_LIB_SOFTWARE;
     impl = MFX_IMPL_SOFTWARE;
+    loadStatus = MFX_ERR_NOT_FOUND;
     dispVersion.Major = MFX_DISPATCHER_VERSION_MAJOR;
     dispVersion.Minor = MFX_DISPATCHER_VERSION_MINOR;
     session = (mfxSession) 0;
@@ -76,6 +78,7 @@ mfxStatus MFX_DISP_HANDLE::Close(void)
     {
         implType = MFX_LIB_SOFTWARE;
         impl = MFX_IMPL_SOFTWARE;
+        loadStatus = MFX_ERR_NOT_FOUND;
         dispVersion.Major = MFX_DISPATCHER_VERSION_MAJOR;
         dispVersion.Minor = MFX_DISPATCHER_VERSION_MINOR;
         session = (mfxSession) 0;
@@ -94,14 +97,14 @@ mfxStatus MFX_DISP_HANDLE::LoadSelectedDLL(const msdk_disp_char *pPath, eMfxImpl
                                            mfxIMPL impl, mfxIMPL implInterface)
 {
     mfxStatus mfxRes = MFX_ERR_NONE;
-    bool isFunctionMissed = false;
 
     // check error(s)
     if ((MFX_LIB_SOFTWARE != implType) &&
         (MFX_LIB_HARDWARE != implType))
     {
         DISPATCHER_LOG_ERROR((("implType == %s, should be either MFX_LIB_SOFTWARE ot MFX_LIB_HARDWARE\n"), DispatcherLog_GetMFXImplString(implType).c_str()));
-        return MFX_ERR_ABORTED;
+        loadStatus = MFX_ERR_ABORTED;
+        return loadStatus;
     }
     // only exact types of implementation is allowed
     if (!(impl & MFX_IMPL_AUDIO) &&
@@ -112,7 +115,8 @@ mfxStatus MFX_DISP_HANDLE::LoadSelectedDLL(const msdk_disp_char *pPath, eMfxImpl
         (MFX_IMPL_HARDWARE4 != impl))
     {
         DISPATCHER_LOG_ERROR((("invalid implementation impl == %s\n"), DispatcherLog_GetMFXImplString(impl).c_str()));
-        return MFX_ERR_ABORTED;
+        loadStatus = MFX_ERR_ABORTED;
+        return loadStatus;
     }        
 
     // close the handle before initialization
@@ -124,10 +128,7 @@ mfxStatus MFX_DISP_HANDLE::LoadSelectedDLL(const msdk_disp_char *pPath, eMfxImpl
     this->implInterface = implInterface;
 
     {
-        mfxVersion maxAPIVersion = {{0, 0}};
-        mfxVersion minAPIVersion = {{0x7fff, 0x7fff}};
-
-        DISPATCHER_LOG_BLOCK(("invoking LoadLibrary(%S)\n", pPath));
+        DISPATCHER_LOG_BLOCK(("invoking LoadLibrary(%S)\n", MSDK2WIDE(pPath)));
         // load the DLL into the memory
         hModule = MFX::mfx_dll_load(pPath);
         
@@ -138,7 +139,7 @@ mfxStatus MFX_DISP_HANDLE::LoadSelectedDLL(const msdk_disp_char *pPath, eMfxImpl
             DISPATCHER_LOG_OPERATION({
                 msdk_disp_char modulePath[1024];
                 GetModuleFileNameW((HMODULE)hModule, modulePath, sizeof(modulePath)/sizeof(modulePath[0]));
-                DISPATCHER_LOG_INFO((("loaded module %S\n"), modulePath))
+                DISPATCHER_LOG_INFO((("loaded module %S\n"), MSDK2WIDE(modulePath)))
             });
 
             if (impl & MFX_IMPL_AUDIO)
@@ -158,20 +159,17 @@ mfxStatus MFX_DISP_HANDLE::LoadSelectedDLL(const msdk_disp_char *pPath, eMfxImpl
                         // function exists in the library,
                         // save the pointer.
                         callAudioTable[i] = pProc;
-                        // save the maximum available API version
-                        if (maxAPIVersion.Version < APIAudioFunc[i].apiVersion.Version)
-                        {
-                            maxAPIVersion = APIAudioFunc[i].apiVersion;
-                            DISPATCHER_LOG_INFO((("found API function \"%s\", maxAPIVersion increased == %u.%u\n"), APIAudioFunc[i].pName, maxAPIVersion.Major, maxAPIVersion.Minor ));
-                        }
                     }
-                    else if (minAPIVersion.Version > APIAudioFunc[i].apiPrevVersion.Version)
+                    else
                     {
-                        // The library doesn't contain the function.
-                        // Reduce the minimal workable API version.
-                        isFunctionMissed = true;
-                        minAPIVersion = APIAudioFunc[i].apiPrevVersion;
-                        DISPATCHER_LOG_WRN((("Can't find API function \"%s\", minAPIVersion lowered=%u.%u\n"), APIAudioFunc[i].pName,minAPIVersion.Major, minAPIVersion.Minor));
+                        // The library doesn't contain the function
+                        DISPATCHER_LOG_WRN((("Can't find API function \"%s\"\n"), APIAudioFunc[i].pName));
+                        if (apiVersion.Version >= APIAudioFunc[i].apiVersion.Version)
+                        {
+                            DISPATCHER_LOG_ERROR((("\"%s\" is required for API %u.%u\n"), APIAudioFunc[i].pName, apiVersion.Major, apiVersion.Minor));
+                            mfxRes = MFX_ERR_UNSUPPORTED;
+                            break;
+                        }
                     }
                 }
             }
@@ -190,43 +188,19 @@ mfxStatus MFX_DISP_HANDLE::LoadSelectedDLL(const msdk_disp_char *pPath, eMfxImpl
                         // function exists in the library,
                         // save the pointer.
                         callTable[i] = pProc;
-                        // save the maximum available API version
-                        if (maxAPIVersion.Version < APIFunc[i].apiVersion.Version)
+                    }
+                    else
+                    {
+                        // The library doesn't contain the function
+                        DISPATCHER_LOG_WRN((("Can't find API function \"%s\"\n"), APIFunc[i].pName));
+                        if (apiVersion.Version >= APIFunc[i].apiVersion.Version)
                         {
-                            maxAPIVersion = APIFunc[i].apiVersion;
-                            DISPATCHER_LOG_INFO((("found API function \"%s\", maxAPIVersion increased == %u.%u\n"), APIFunc[i].pName, maxAPIVersion.Major, maxAPIVersion.Minor ));
+                            DISPATCHER_LOG_ERROR((("\"%s\" is required for API %u.%u\n"), APIFunc[i].pName, apiVersion.Major, apiVersion.Minor));
+                            mfxRes = MFX_ERR_UNSUPPORTED;
+                            break;
                         }
                     }
-                    else if (minAPIVersion.Version > APIFunc[i].apiPrevVersion.Version)
-                    {
-                        // The library doesn't contain the function.
-                        // Reduce the minimal workable API version.
-                        isFunctionMissed = true;
-                        minAPIVersion = APIFunc[i].apiPrevVersion;
-                        DISPATCHER_LOG_WRN((("Can't find API function \"%s\", minAPIVersion lowered=%u.%u\n"), APIFunc[i].pName,minAPIVersion.Major, minAPIVersion.Minor));
-                    }
                 }
-            }
-
-            // select the highest available API version
-            if (minAPIVersion.Version > maxAPIVersion.Version)
-            {
-                DISPATCHER_LOG_INFO((("minAPIVersion(%u.%u) > maxAPIVersion(%u.%u), minAPIVersion lowered to (%u.%u)\n")
-                    , minAPIVersion.Major, minAPIVersion.Minor
-                    , maxAPIVersion.Major, maxAPIVersion.Minor
-                    , maxAPIVersion.Major, maxAPIVersion.Minor));
-                minAPIVersion = maxAPIVersion;
-            }
-
-            // if the library doesn't have required functions,
-            // the library must be unloaded.
-            if ((0 == minAPIVersion.Version) ||
-                (minAPIVersion.Major != apiVersion.Major) ||
-                ((minAPIVersion.Minor < apiVersion.Minor) && isFunctionMissed))
-            {
-                DISPATCHER_LOG_WRN((("library version check failed: actual library version is %u.%u\n"),
-                               minAPIVersion.Major, minAPIVersion.Minor))
-                mfxRes = MFX_ERR_UNSUPPORTED;
             }
         }
         else
@@ -273,12 +247,22 @@ mfxStatus MFX_DISP_HANDLE::LoadSelectedDLL(const msdk_disp_char *pPath, eMfxImpl
         }
         else
         {
-            //special hook for applications that uses sink api to get loaded library path
-            DISPATCHER_LOG_LIBRARY(("%p" , hModule));
-            DISPATCHER_LOG_INFO(("library loaded succesfully\n"))
+            mfxRes = MFXQueryVersion((mfxSession) this, &actualApiVersion);
+            if (MFX_ERR_NONE != mfxRes)
+            {
+                DISPATCHER_LOG_ERROR((("MFXQueryVersion returned: %d, skiped this library\n"), mfxRes))
+            }
+            else
+            {
+                DISPATCHER_LOG_INFO((("MFXQueryVersion returned API: %d.%d\n"), actualApiVersion.Major, actualApiVersion.Minor))
+                //special hook for applications that uses sink api to get loaded library path
+                DISPATCHER_LOG_LIBRARY(("%p" , hModule));
+                DISPATCHER_LOG_INFO(("library loaded succesfully\n"))
+            }
         }
     }
 
+    loadStatus = mfxRes;
     return mfxRes;
 
 } // mfxStatus MFX_DISP_HANDLE::LoadSelectedDLL(const msdk_disp_char *pPath, eMfxImplType implType, mfxIMPL impl)
