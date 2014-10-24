@@ -1,6 +1,6 @@
 /* ****************************************************************************** *\
 
-Copyright (C) 2012-2013 Intel Corporation.  All rights reserved.
+Copyright (C) 2012-2014 Intel Corporation.  All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
 modification, are permitted provided that the following conditions are met:
@@ -136,7 +136,7 @@ const char *DispatcherLog_GetMFXStatusString(int sts)
 //////////////////////////////////////////////////////////////////////////
 
 
-void DispatcherLogBracketsHelper::Write(char * str, ...)
+void DispatcherLogBracketsHelper::Write(const char * str, ...)
 {
     va_list argsptr;
     va_start(argsptr, str);
@@ -283,7 +283,7 @@ public:
         }
     }
 
-    virtual void Write(int level, int opcode, char * msg, va_list argptr)
+    virtual void Write(int level, int opcode, const char * msg, va_list argptr)
     {
         //event not registered
         if (0==m_EventHandle)
@@ -376,7 +376,7 @@ public:
                                       , this);
     }
 
-    virtual void Write(int level, int opcode, char * msg, va_list argptr)
+    virtual void Write(int level, int opcode, const char * msg, va_list argptr)
     {
         //we cannot call attach sink since we may have been called from iteration
         //we axchanging preserve that placeholding
@@ -422,7 +422,7 @@ public:
     }
 };
 
-void FileSink::Write(int level, int /*opcode*/, char * msg, va_list argptr)
+void FileSink::Write(int level, int /*opcode*/, const char * msg, va_list argptr)
 {
     if (NULL != m_hdl && NULL != msg)
     {

@@ -1,6 +1,6 @@
 /* ****************************************************************************** *\
 
-Copyright (C) 2012-2013 Intel Corporation.  All rights reserved.
+Copyright (C) 2012-2014 Intel Corporation.  All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
 modification, are permitted provided that the following conditions are met:
@@ -104,19 +104,26 @@ void DXDevice::Close(void)
 
 void DXDevice::LoadDLLModule(const wchar_t *pModuleName)
 {
-    UINT prevErrorMode;
+    DWORD prevErrorMode = 0;
 
     // unload the module if it is required
     UnloadDLLModule();
 
     // set the silent error mode
+#if (_WIN32_WINNT >= 0x0600) && !(__GNUC__)
+    SetThreadErrorMode(SEM_FAILCRITICALERRORS, &prevErrorMode);
+#else
     prevErrorMode = SetErrorMode(SEM_FAILCRITICALERRORS);
-
+#endif
     // load specified library
     m_hModule = LoadLibraryW(pModuleName);
 
     // set the previous error mode
+#if (_WIN32_WINNT >= 0x0600) && !(__GNUC__)
+    SetThreadErrorMode(prevErrorMode, NULL);
+#else
     SetErrorMode(prevErrorMode);
+#endif
 
 } // void LoadDLLModule(const wchar_t *pModuleName)
 
@@ -223,41 +230,36 @@ bool D3D9Device::Init(const mfxU32 adapterNum)
             m_driverVersion = (mfxU64)adapterIdent.DriverVersion.QuadPart;
 
             // load LUID
-            do
-            {    
-                IDirect3D9Ex *pD3D9Ex;
-                D3DExCreateFunctionPtr_t pFuncEx;
-                LUID d3d9LUID;
+            IDirect3D9Ex *pD3D9Ex;
+            D3DExCreateFunctionPtr_t pFuncEx;
+            LUID d3d9LUID;
 
-                // find the appropriate function
-                pFuncEx = (D3DExCreateFunctionPtr_t) GetProcAddress(m_hModule, "Direct3DCreate9Ex");
-                if (NULL == pFuncEx)
-                {
-                    // the extended interface is not supported
-                    break;
-                }
+            // find the appropriate function
+            pFuncEx = (D3DExCreateFunctionPtr_t) GetProcAddress(m_hModule, "Direct3DCreate9Ex");
+            if (NULL == pFuncEx)
+            {
+                // the extended interface is not supported
+                return true;
+            }
 
-                // create extended interface
-                hRes = pFuncEx(D3D_SDK_VERSION, &pD3D9Ex);
-                if (FAILED(hRes))
-                {
-                    // can't create extended interface
-                    break;
-                }
-                m_pD3D9Ex = pD3D9Ex;
+            // create extended interface
+            hRes = pFuncEx(D3D_SDK_VERSION, &pD3D9Ex);
+            if (FAILED(hRes))
+            {
+                // can't create extended interface
+                return true;
+            }
+            m_pD3D9Ex = pD3D9Ex;
 
-                // obtain D3D9 device LUID
-                hRes = pD3D9Ex->GetAdapterLUID(adapterNum, &d3d9LUID);
-                if (FAILED(hRes))
-                {
-                    // can't get extended interface
-                    break;
-                }
-
-                // copy the LUID
-                *((LUID *) &m_luid) = d3d9LUID;
-
-            } while (FAILED(hRes));
+            // obtain D3D9 device LUID
+            hRes = pD3D9Ex->GetAdapterLUID(adapterNum, &d3d9LUID);
+            if (FAILED(hRes))
+            {
+                // can't get LUID
+                return true;
+            }
+            // copy the LUID
+            *((LUID *) &m_luid) = d3d9LUID;
         }
         else
         {
@@ -265,7 +267,7 @@ bool D3D9Device::Init(const mfxU32 adapterNum)
                 wchar_t path[1024]; 
                 DWORD lastErr = GetLastError();
                 GetModuleFileNameW(m_hModule, path, sizeof(path)/sizeof(path[0]));
-                printf("FAIL: invoking GetProcAddress(Direct3DCreate9) in %S : GetLastError()==0x%x\n", path, lastErr); });
+                DXVA2DEVICE_TRACE(("FAIL: invoking GetProcAddress(Direct3DCreate9) in %S : GetLastError()==0x%x\n", path, lastErr)); });
                 return false;
         }
     }
