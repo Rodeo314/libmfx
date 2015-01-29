@@ -1,6 +1,6 @@
 /* ****************************************************************************** *\
 
-Copyright (C) 2013 Intel Corporation.  All rights reserved.
+Copyright (C) 2013-2014 Intel Corporation.  All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
 modification, are permitted provided that the following conditions are met:
@@ -37,6 +37,8 @@ File Name: mfx_plugin_hive.h
 #include <string.h>
 #include <memory>
 #include <stdio.h>
+
+struct MFX_DISP_HANDLE;
 
 namespace MFX {
 
@@ -92,7 +94,11 @@ namespace MFX {
             : mCurrentAPIVersion(currentAPIVersion)
         {
         }
-        bool ConvertAPIVersion( mfxU32 APIVersion, PluginDescriptionRecord &descriptionRecord) const;
+        void ConvertAPIVersion( mfxU32 APIVersion, PluginDescriptionRecord &descriptionRecord) const
+        {
+            descriptionRecord.APIVersion.Minor = static_cast<mfxU16> (APIVersion & 0x0ff);
+            descriptionRecord.APIVersion.Major = static_cast<mfxU16> (APIVersion >> 8);
+        }
     };
 
     //populated from registry
@@ -113,4 +119,14 @@ namespace MFX {
         bool ParseFile(FILE * f, PluginDescriptionRecord & des);
         bool ParseKVPair( msdk_disp_char *key, msdk_disp_char * value, PluginDescriptionRecord & des);
     };
+
+
+    //plugins are loaded from FS close to Runtime library
+    class MFXDefaultPlugins : public MFXPluginStorageBase
+    {
+    public:
+        MFXDefaultPlugins(mfxVersion currentAPIVersion, MFX_DISP_HANDLE * hdl, int implType);
+    private:
+    };
+
 }

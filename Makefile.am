@@ -7,7 +7,9 @@ library_include_HEADERS =                 \
 	include/msdk/include/mfxaudio++.h     \
 	include/msdk/include/mfxcommon.h      \
 	include/msdk/include/mfxdefs.h        \
+	include/msdk/include/mfxenc.h         \
 	include/msdk/include/mfxjpeg.h        \
+	include/msdk/include/mfxla.h          \
 	include/msdk/include/mfxmvc.h         \
 	include/msdk/include/mfxplugin.h      \
 	include/msdk/include/mfxplugin++.h    \

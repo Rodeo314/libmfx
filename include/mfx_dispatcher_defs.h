@@ -1,6 +1,6 @@
 /* ****************************************************************************** *\
 
-Copyright (C) 2013 Intel Corporation.  All rights reserved.
+Copyright (C) 2013-2014 Intel Corporation.  All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
 modification, are permitted provided that the following conditions are met:
@@ -31,18 +31,44 @@ File Name: mfx_dispatcher_defs.h
 #pragma once
 #include "mfxdefs.h"
 
-#if defined(_WIN32) || defined(_WIN64)
-typedef wchar_t  msdk_disp_char;
-#define msdk_disp_char_cpy_s(to, to_size, from) wcscpy_s(to,to_size, from)
-#else
-#define msdk_disp_char char
-#define msdk_disp_char_cpy_s(to, to_size, from) strcpy(to, from)
+#if defined(MFX_DISPATCHER_LOG)
+#include <string>
+#include <string.h>
 #endif
 
-#ifdef __MINGW32__
-#define  sscanf_s  sscanf
-#define swscanf_s swscanf
+#if defined(_WIN32) || defined(_WIN64)
+typedef wchar_t  msdk_disp_char;
+#define MSDK2WIDE(x) x
+
+#if _MSC_VER >= 1400
+    #define msdk_disp_char_cpy_s(to, to_size, from) wcscpy_s(to,to_size, from)
+#else
+    #define msdk_disp_char_cpy_s(to, to_size, from) wcscpy(to, from)
 #endif
+
+#else
+typedef char msdk_disp_char;
+#define msdk_disp_char_cpy_s(to, to_size, from) strcpy(to, from)
+
+#if defined(MFX_DISPATCHER_LOG)
+#define MSDK2WIDE(x) getWideString(x).c_str()
+
+inline std::wstring getWideString(const char * string)
+{
+    size_t len = strlen(string);
+    return std::wstring(string, string + len);
+}
+#else
+    #define MSDK2WIDE(x) x  
+#endif
+
+#endif
+
+#ifdef __GNUC__
+#define  sscanf_s  sscanf
+#define  swscanf_s swscanf
+#endif
+
 
 // declare library module's handle
 typedef void * mfxModuleHandle;

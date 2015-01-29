@@ -1,6 +1,6 @@
-/*******************************************************************************
+/******************************************************************************* *\
 
-Copyright (C) 2013 Intel Corporation.  All rights reserved.
+Copyright (C) 2014 Intel Corporation.  All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
 modification, are permitted provided that the following conditions are met:
@@ -24,9 +24,80 @@ THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF
 THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-File Name: mfxvstructures.h
+File Name: mfxla.h
 
 *******************************************************************************/
-#include "mfxstructures.h"
+#ifndef __MFXLA_H__
+#define __MFXLA_H__
+#include "mfxdefs.h"
+#include "mfxvstructures.h"
 
+#ifdef __cplusplus
+extern "C"
+{
+#endif /* __cplusplus */
+
+
+enum 
+{
+    MFX_EXTBUFF_LOOKAHEAD_CTRL  =   MFX_MAKEFOURCC('L','A','C','T'),
+    MFX_EXTBUFF_LOOKAHEAD_STAT  =   MFX_MAKEFOURCC('L','A','S','T'),
+};
+
+
+typedef struct
+{
+    mfxExtBuffer    Header;
+    mfxU16  LookAheadDepth;
+    mfxU16  DependencyDepth;
+    mfxU16  DownScaleFactor;
+
+    mfxU16  reserved1[24];
+    
+    mfxU16  NumOutStream;
+    struct  mfxStream{
+        mfxU16  Width;
+        mfxU16  Height;
+        mfxU16  reserved2[14];
+    } OutStream[16];
+}mfxExtLAControl;
+
+typedef struct
+{
+    mfxU16  Width;
+    mfxU16  Height;
+
+    mfxU32  FrameType;
+    mfxU32  FrameDisplayOrder;
+    mfxU32  FrameEncodeOrder;
+
+    mfxU32  IntraCost;
+    mfxU32  InterCost;
+    mfxU32  DependencyCost;
+
+    mfxU16  reserved[24];
+
+    mfxU64 EstimatedRate[52];
+}mfxLAFrameInfo; 
+
+typedef struct  {
+    mfxExtBuffer    Header;
+
+    mfxU16  reserved[20];
+
+    mfxU16  NumAlloc;
+    mfxU16  NumStream;
+    mfxU16  NumFrame;
+    mfxLAFrameInfo   *FrameStat; 
+
+    mfxFrameSurface1 *OutSurface;
+
+} mfxExtLAFrameStatistics;
+
+#ifdef __cplusplus
+} // extern "C"
+#endif /* __cplusplus */
+
+
+#endif
 

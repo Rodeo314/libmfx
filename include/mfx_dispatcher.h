@@ -1,6 +1,6 @@
 /* ****************************************************************************** *\
 
-Copyright (C) 2012-2013 Intel Corporation.  All rights reserved.
+Copyright (C) 2012-2014 Intel Corporation.  All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
 modification, are permitted provided that the following conditions are met:
@@ -37,6 +37,7 @@ File Name: mfx_dispatcher.h
 #include <stddef.h>
 #include "mfx_dispatcher_defs.h"
 #include "mfx_load_plugin.h"
+#include "mfxenc.h"
 
 enum
 {
@@ -58,11 +59,11 @@ enum eFunc
 {
     eMFXInit,
     eMFXClose,
-    eMFXJoinSession,
-    eMFXCloneSession,
     eMFXQueryIMPL,
     eMFXQueryVersion,
+    eMFXJoinSession,
     eMFXDisjoinSession,
+    eMFXCloneSession,
     eMFXSetPriority,
     eMFXGetPriority,
 #include "mfx_exposed_functions_list.h"
@@ -76,10 +77,10 @@ enum eAudioFunc
     eAudioFuncTotal
 };
 
-// declare max buffer length for DLL path
+// declare max buffer length for regsitry key name
 enum
 {
-    MFX_MAX_VALUE_NAME          = 128
+    MFX_MAX_REGISTRY_KEY_NAME = 256
 };
 
 // declare the maximum DLL path
@@ -136,9 +137,16 @@ struct MFX_DISP_HANDLE
     mfxVersion dispVersion;
     // A real handle passed to a called function
     mfxSession session;
-    // required API version of session initialized
-    const
-    mfxVersion apiVersion;
+    // Required API version of session initialized
+    const mfxVersion apiVersion;
+    // Actual library API version
+    mfxVersion actualApiVersion;
+    // Status of loaded dll
+    mfxStatus loadStatus;
+    // Resgistry subkey name for windows version
+    msdk_disp_char subkeyName[MFX_MAX_REGISTRY_KEY_NAME];
+    // Storage ID for windows version
+    int storageID;
 
     // Library's module handle
     mfxModuleHandle hModule;
@@ -149,8 +157,6 @@ struct MFX_DISP_HANDLE
     // function call table
     mfxFunctionPointer callTable[eVideoFuncTotal];
     mfxFunctionPointer callAudioTable[eAudioFuncTotal];
-
-    wchar_t subKeyName[MFX_MAX_VALUE_NAME];
 
 private:
     // Declare assignment operator and copy constructor to prevent occasional assignment
@@ -167,6 +173,20 @@ bool operator == (const mfxVersion &one, const mfxVersion &two)
 
 } // bool operator == (const mfxVersion &one, const mfxVersion &two)
 
+inline
+bool operator < (const mfxVersion &one, const mfxVersion &two)
+{
+    return (one.Major == two.Major) && (one.Minor < two.Minor);
+
+} // bool operator < (const mfxVersion &one, const mfxVersion &two)
+
+inline
+bool operator <= (const mfxVersion &one, const mfxVersion &two)
+{
+    return (one == two) || (one < two);
+} // bool operator <= (const mfxVersion &one, const mfxVersion &two)
+
+
 //
 // declare a table with functions descriptions
 //
@@ -178,9 +198,6 @@ struct FUNCTION_DESCRIPTION
     const char *pName;
     // API version when function appeared first time
     mfxVersion apiVersion;
-    // Minimal API version, which works without this function
-    mfxVersion apiPrevVersion;
-
 } FUNCTION_DESCRIPTION;
 
 extern const
