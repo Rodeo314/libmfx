@@ -11,12 +11,14 @@ library_include_HEADERS =                 \
 	include/msdk/include/mfxjpeg.h        \
 	include/msdk/include/mfxla.h          \
 	include/msdk/include/mfxmvc.h         \
+        include/msdk/include/mfxpak.h         \
 	include/msdk/include/mfxplugin.h      \
 	include/msdk/include/mfxplugin++.h    \
 	include/msdk/include/mfxsession.h     \
 	include/msdk/include/mfxstructures.h  \
 	include/msdk/include/mfxvideo.h       \
 	include/msdk/include/mfxvideo++.h     \
+        include/msdk/include/mfxvp8.h         \
 	include/msdk/include/mfxvstructures.h
 
 AM_CXXFLAGS = -Wall -Wextra -DMINGW_HAS_SECURE_API=1 
@@ -29,7 +31,6 @@ libmfx_la_SOURCES =              \
 	src/mfx_critical_section.cpp \
 	src/mfx_dispatcher.cpp       \
 	src/mfx_dispatcher_log.cpp   \
-	src/mfx_dispatcher_trace.cpp \
 	src/mfx_dxva2_device.cpp     \
 	src/mfx_function_table.cpp   \
 	src/mfx_library_iterator.cpp \
